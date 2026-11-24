@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+  <http:listener-config name="HTTP_Listener_config">
+    <http:listener-connection host="0.0.0.0" port="8081" />
+  </http:listener-config>
+
+  <!-- Triggers Rule 1 (MG001) twice: hardcoded clientId and clientSecret -->
+  <http:request-config name="Partner_API_Config">
+    <http:request-connection host="api.partner.example.com" port="443" protocol="HTTPS">
+      <http:authentication>
+        <http:basic-authentication clientId="demo-client-id-12345" clientSecret="super-secret-api-key-999" />
+      </http:authentication>
+    </http:request-connection>
+  </http:request-config>
+
+  <!-- Triggers Rule 1 (MG001) once: hardcoded password -->
+  <db:config name="Orders_DB_Config">
+    <db:my-sql-connection host="localhost" port="3306" user="mule_app" password="Admin@12345" database="orders" />
+  </db:config>
+
+  <!-- Safe configurations: should NOT trigger MG001 -->
+  <db:config name="Secure_DB_Config">
+    <db:my-sql-connection host="localhost" port="3306" user="mule_app" password="${secure::db.password}" database="orders" />
+  </db:config>
+
+  <http:request-config name="Dynamic_API_Config">
+    <http:request-connection host="api.internal.example.com" port="443" protocol="HTTPS">
+      <http:authentication>
+        <http:basic-authentication clientId="${secure::api.clientId}" clientSecret="#[vars.runtimeSecret]" />
+      </http:authentication>
+    </http:request-connection>
+  </http:request-config>
+
+  <!-- Triggers MG002 (Missing Error Handler), MG003 (Missing Logger), MG004 (Missing Validation), MG005 (Missing MUnit) -->
+  <flow name="create-order-flow">
+    <http:listener config-ref="HTTP_Listener_config" path="/orders" allowedMethods="POST" />
+    <set-payload value='#[{"status": "received"}]' mimeType="application/json" />
+  </flow>
+
+  <!-- Triggers Pro rules: MG008 (DEBUG logger), MG006 (DataWeave Null Safety), MG007 (DB/HTTP inside foreach), plus MG005 -->
+  <flow name="sync-orders-flow">
+    <logger level="DEBUG" message="Syncing orders payload" />
+    <ee:transform doc:name="Map Customer Order">
+      <ee:message>
+        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  customerName: payload.customer.name,
+  orderTotal: payload.order.amount,
+  safeEmail: payload.customer.email default ''
+}]]></ee:set-payload>
+      </ee:message>
+    </ee:transform>
+    <foreach collection="#[payload.items]">
+      <db:select config-ref="Secure_DB_Config">
+        <db:sql>SELECT * FROM orders WHERE id = :id</db:sql>
+      </db:select>
+      <http:request method="POST" config-ref="Dynamic_API_Config" path="/notify" />
+    </foreach>
+    <error-handler>
+      <on-error-propagate enableNotifications="true" logException="true">
+        <logger level="ERROR" message='#["Sync error: " ++ (error.description default "Unknown")]' />
+      </on-error-propagate>
+    </error-handler>
+  </flow>
+
+</mule>

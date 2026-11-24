@@ -1,0 +1,79 @@
+{
+  "name": "muleguard",
+  "displayName": "MuleGuard Pro",
+  "description": "Guardrails for MuleSoft - Secure, Compliant Mule APIs",
+  "version": "0.2.0",
+  "publisher": "niranjanpotter",
+  "license": "MIT",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#0b1220",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/niranjanpotter/MuleGuard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/niranjanpotter/MuleGuard/issues"
+  },
+  "homepage": "https://github.com/niranjanpotter/MuleGuard#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "mulesoft",
+    "mule",
+    "mule4",
+    "dataweave",
+    "dwl",
+    "linter",
+    "security",
+    "compliance",
+    "guardrails",
+    "munit"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:xml",
+    "workspaceContains:**/*.xml",
+    "workspaceContains:**/*.dwl"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "muleguard.scanWorkspace",
+        "title": "MuleGuard Pro: Scan Workspace"
+      },
+      {
+        "command": "muleguard.fixAll",
+        "title": "MuleGuard Pro: Fix All Auto-Fixable Issues"
+      }
+    ],
+    "configuration": {
+      "title": "MuleGuard Pro",
+      "properties": {
+        "muleguard.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable MuleGuard Pro static analysis diagnostics for Mule XML and DataWeave (.dwl) files."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.7.0"
+  }
+}
