@@ -5,6 +5,11 @@ All notable changes to **MuleGuard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-11-26
+### Changed
+- **Clean Natural Mule Project Structure:** Reverted Flow Explorer to the clean, familiar 4-category layout (`Mule Flows & Sub-Flows`, `DataWeave Transformations`, `MUnit Test Suites`, `Environment Configs`) that automatically adapts to the project's actual XML files without artificial layers.
+- **Strict Deduplication:** Eliminated duplicate configuration files and repeated flows using canonical path hashing and filename deduplication.
+
 ## [1.0.2] - 2026-11-26
 ### Fixed
 - **Eliminated Duplicate Explorer Items:** Fixed glob matching in Flow Explorer to ensure environment YAML configs, flows, and test suites are strictly deduplicated with zero repeated entries.
