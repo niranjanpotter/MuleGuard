@@ -1,28 +1,18 @@
 # Changelog
 
-All notable changes to **MuleGuard Pro** will be documented in this file.
+All notable changes to **MuleGuard** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-11-26
-### Added
-- **API-Led Architecture & Module Hierarchy in Flow Explorer:** Automatically groups the project by API Name and MuleSoft API-Led Connectivity layers (Experience APIs `eAPI`, Process APIs `pAPI`, and System APIs `sAPI`).
-- **Enriched Connector Symbols & In/Out Payload Contracts:** Real-time hover tooltips now feature Anypoint Studio component symbols, technical classifications, and exact Input/Output message payload contracts (headers, variables, response data).
-
-## [1.1.0] - 2026-11-26
-### Added
-- **Interactive UI Architecture & Flow Inspector:** Clicking any connector or message processor in the Flow Visualizer (`Ctrl+Shift+V`) displays a live side inspector with full XML attribute properties, threading & runtime model, plain-English summary, and payload code blocks.
-- **Executive Architecture & Delivery Review Dashboard (`muleguard.showExecutiveDashboard`):** Tailored views for Integration Architects (security posture, thread concurrency, NFRs) and Delivery Managers (automated pass rate, release readiness gates, tech debt).
-- **DataWeave File Logic Explainer (`muleguard.explainDataWeave`):** Structural AST breakdown of `.dwl` transformations showing declared variables, helper functions, and business transformation pipeline.
-
-## [1.0.2] - 2026-11-26
-### Added
-- **DataWeave Hover Intelligence & Plain-English Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `pluck`, `sizeOf`, `isEmpty`, `uuid`, etc.) or context variable (`payload`, `vars`, `attributes`, `default`, `if/else`) inside `.dwl` or `<ee:transform>` displays a human-readable explanation, type signature, and live example.
-
 ## [1.0.1] - 2026-11-26
-### Changed
-- Brand new ultra-premium high-tech cyber shield logo featuring "MuleGuard by Niranjan" branding with 3D glassmorphism and cyan MuleSoft integration nodes.
+### Added
+- **API-Led Architecture & Module Hierarchy in Flow Explorer:** Automatically organizes the project by API Modules and MuleSoft API-Led Connectivity layers (Experience APIs `eAPI`, Process APIs `pAPI`, and System APIs `sAPI`).
+- **Interactive UI Architecture & Flow Inspector:** Clicking any connector or message processor in the Flow Visualizer (`Ctrl+Shift+V`) displays a live side inspector with full XML attribute properties, threading & runtime model, plain-English summary, and payload code blocks.
+- **DataWeave Hover Intelligence & Logic Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `pluck`, `sizeOf`, `isEmpty`, `uuid`, etc.) or context variable (`payload`, `vars`, `attributes`, `default`, `if/else`) displays a human-readable explanation, type signature, and live example.
+- **Executive Architecture & Delivery Review Dashboard (`muleguard.showExecutiveDashboard`):** Tailored views for Integration Architects (security posture, thread concurrency, NFRs) and Delivery Managers (automated pass rate, release readiness gates, tech debt).
+- **Enriched Connector Symbols & In/Out Payload Contracts:** Real-time hover tooltips now feature Anypoint Studio component symbols, technical classifications, and exact Input/Output message payload contracts.
+- **Brand New Premium Logo:** High-tech cyber shield with glowing cyan MuleSoft integration circuits and "MuleGuard by Niranjan" branding.
 
 ## [1.0.0] - 2026-11-26
 ### Added
