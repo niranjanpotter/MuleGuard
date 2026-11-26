@@ -69,24 +69,30 @@ export class MuleGuardHoverProvider implements vscode.HoverProvider {
     markdownContent.supportHtml = true;
     markdownContent.isTrusted = true;
 
-    // Header: displayName (category)
-    markdownContent.appendMarkdown(`### ${connectorInfo.displayName} (${connectorInfo.category})\n\n`);
+    const symbol = this._getMuleSymbol(tagName.toLowerCase());
+
+    // Header: symbol + displayName (category)
+    markdownContent.appendMarkdown(`### ${symbol} ${connectorInfo.displayName} \`${tagName}\`\n\n`);
+    markdownContent.appendMarkdown(`*Category:* **${connectorInfo.category}** • *Mule 4 Component*\n\n`);
 
     // Description
-    markdownContent.appendMarkdown(`${connectorInfo.description}\n\n`);
+    markdownContent.appendMarkdown(`**What It Does:**  \n${connectorInfo.description}\n\n`);
 
     // Runtime notes
-    markdownContent.appendMarkdown(`**Runtime:** ${connectorInfo.runtimeNotes}\n\n`);
+    markdownContent.appendMarkdown(`⚡ **Runtime Execution Model:**  \n${connectorInfo.runtimeNotes}\n\n`);
+
+    // Inferred Payload Contract
+    const payloadContract = this._getPayloadContract(tagName.toLowerCase());
+    markdownContent.appendMarkdown(`📦 **Message Payload Contract:**  \n${payloadContract}\n\n`);
 
     // Common Attributes as a markdown table
     if (connectorInfo.commonAttributes) {
       const entries = Object.entries(connectorInfo.commonAttributes);
       if (entries.length > 0) {
-        markdownContent.appendMarkdown(`**Common Attributes:**\n\n`);
-        markdownContent.appendMarkdown(`| Attribute | Description |\n`);
-        markdownContent.appendMarkdown(`|-----------|-------------|\n`);
+        markdownContent.appendMarkdown(`**Key Configurations & Attributes:**\n\n`);
+        markdownContent.appendMarkdown(`| Attribute | Purpose & Best Practice |\n`);
+        markdownContent.appendMarkdown(`| :--- | :--- |\n`);
         for (const [attrName, attrDesc] of entries) {
-          // Escape pipe characters in descriptions
           const escapedDesc = attrDesc.replace(/\|/g, '\\|');
           markdownContent.appendMarkdown(`| \`${attrName}\` | ${escapedDesc} |\n`);
         }
@@ -95,10 +101,39 @@ export class MuleGuardHoverProvider implements vscode.HoverProvider {
     }
 
     // Documentation link
-    markdownContent.appendMarkdown(`[📖 Anypoint Docs](${connectorInfo.docsUrl})\n`);
+    markdownContent.appendMarkdown(`[📖 Official Anypoint Documentation](${connectorInfo.docsUrl})\n`);
 
     // 6. Return the Hover
     return new vscode.Hover(markdownContent, wordRange);
+  }
+
+  private _getMuleSymbol(tag: string): string {
+    if (tag.startsWith('http:listener')) return '🌐 [Inbound Endpoint]';
+    if (tag.startsWith('http:request')) return '📡 [Outbound REST Client]';
+    if (tag.startsWith('db:select')) return '🔍 [SQL Query]';
+    if (tag.startsWith('db:insert') || tag.startsWith('db:update') || tag.startsWith('db:delete')) return '💾 [Database DML]';
+    if (tag.startsWith('ee:transform')) return '🔄 [DataWeave Engine]';
+    if (tag === 'flow') return '⚡ [Execution Flow]';
+    if (tag === 'sub-flow') return '↪ [Inline Sub-Flow]';
+    if (tag === 'choice') return '🔀 [Conditional Router]';
+    if (tag === 'scatter-gather') return '🚀 [Parallel Multicast]';
+    if (tag === 'foreach') return '🔁 [Sequential Iterator]';
+    if (tag === 'until-successful') return '⏳ [Retry Scope]';
+    if (tag.includes('error')) return '🛡️ [Error Handler]';
+    if (tag.includes('logger')) return '📝 [Logging Processor]';
+    return '⚙️ [Mule Processor]';
+  }
+
+  private _getPayloadContract(tag: string): string {
+    if (tag.startsWith('http:listener')) return '📥 **Input:** Raw HTTP Body stream (`attributes` contain headers, queryParams, method) ➔ **Output:** Transformed response body.';
+    if (tag.startsWith('http:request')) return '📤 **Input:** Current message payload sent as request body ➔ **Output:** HTTP response body replaces payload (`attributes.statusCode` set).';
+    if (tag.startsWith('db:select')) return '📥 **Input:** SQL parameters evaluated from current context ➔ **Output:** `Array<Object>` (List of database record Maps).';
+    if (tag.startsWith('db:insert') || tag.startsWith('db:update') || tag.startsWith('db:delete')) return '📥 **Input:** Parameterized SQL payload ➔ **Output:** `{ affectedRows: Number, generatedKeys?: Array }`.';
+    if (tag.startsWith('ee:transform')) return '🔄 **Input:** Reads `payload`, `vars`, and `attributes` ➔ **Output:** Produces new payload or variables in target MIME format (JSON, XML, Java).';
+    if (tag === 'scatter-gather') return '🚀 **Input:** Clones current message to all routes in parallel ➔ **Output:** Composite Map of route results `{ "0": { payload: ... }, "1": { payload: ... } }`.';
+    if (tag === 'foreach') return '🔁 **Input:** Collection array ➔ Processes each item in isolation ➔ Original payload restored at end of loop unless modified.';
+    if (tag === 'flow-ref') return '↪ Passes current message (`payload`, `vars`, `attributes`) seamlessly into target flow/sub-flow.';
+    return 'Message payload flows through processor sequentially.';
   }
 }
 

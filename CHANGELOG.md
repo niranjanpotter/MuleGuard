@@ -5,6 +5,11 @@ All notable changes to **MuleGuard Pro** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-26
+### Added
+- **API-Led Architecture & Module Hierarchy in Flow Explorer:** Automatically groups the project by API Name and MuleSoft API-Led Connectivity layers (Experience APIs `eAPI`, Process APIs `pAPI`, and System APIs `sAPI`).
+- **Enriched Connector Symbols & In/Out Payload Contracts:** Real-time hover tooltips now feature Anypoint Studio component symbols, technical classifications, and exact Input/Output message payload contracts (headers, variables, response data).
+
 ## [1.1.0] - 2026-11-26
 ### Added
 - **Interactive UI Architecture & Flow Inspector:** Clicking any connector or message processor in the Flow Visualizer (`Ctrl+Shift+V`) displays a live side inspector with full XML attribute properties, threading & runtime model, plain-English summary, and payload code blocks.
