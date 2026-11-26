@@ -5,6 +5,10 @@ All notable changes to **MuleGuard Pro** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-11-26
+### Added
+- **DataWeave Hover Intelligence & Plain-English Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `pluck`, `sizeOf`, `isEmpty`, `uuid`, etc.) or context variable (`payload`, `vars`, `attributes`, `default`, `if/else`) inside `.dwl` or `<ee:transform>` displays a human-readable explanation, type signature, and live example.
+
 ## [1.0.1] - 2026-11-26
 ### Changed
 - Brand new ultra-premium high-tech cyber shield logo featuring "MuleGuard by Niranjan" branding with 3D glassmorphism and cyan MuleSoft integration nodes.

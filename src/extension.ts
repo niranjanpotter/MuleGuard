@@ -11,6 +11,7 @@ import { MuleGuardFixProvider, fixAllInDocument } from './fixProvider';
 import { FlowExplorerProvider } from './flowExplorer';
 import { FlowVisualizerPanel } from './flowVisualizer';
 import { MuleGuardHoverProvider, MULE_XML_SELECTOR } from './hoverProvider';
+import { DataWeaveHoverProvider, DATAWEAVE_SELECTOR } from './dataweaveHoverProvider';
 import { calculateComplexityMetrics, compareEnvConfigs, runSecretScanner } from './tooling';
 
 const CHANGE_DEBOUNCE_MS = 250;
@@ -280,6 +281,11 @@ export function activate(context: vscode.ExtensionContext): void {
     new MuleGuardHoverProvider()
   );
 
+  const dwHoverDisposable = vscode.languages.registerHoverProvider(
+    DATAWEAVE_SELECTOR,
+    new DataWeaveHoverProvider()
+  );
+
   // Register Flow Explorer Tree View
   const flowExplorerProvider = new FlowExplorerProvider();
   const treeViewDisposable = vscode.window.registerTreeDataProvider(
@@ -357,6 +363,7 @@ export function activate(context: vscode.ExtensionContext): void {
     onConfigDisposable,
     codeActionsDisposable,
     hoverDisposable,
+    dwHoverDisposable,
     treeViewDisposable,
     refreshExplorerDisposable,
     codeReviewDisposable,
