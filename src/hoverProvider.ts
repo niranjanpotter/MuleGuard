@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { CONNECTOR_KNOWLEDGE, ConnectorInfo } from './connectorKnowledge';
+import { buildDataWeaveHover } from './dataweaveHoverProvider';
 
 export class MuleGuardHoverProvider implements vscode.HoverProvider {
   provideHover(
@@ -61,6 +62,11 @@ export class MuleGuardHoverProvider implements vscode.HoverProvider {
     // 4. Look up the tag name (lowercase) in CONNECTOR_KNOWLEDGE
     const connectorInfo: ConnectorInfo | undefined = CONNECTOR_KNOWLEDGE[tagName.toLowerCase()];
     if (!connectorInfo) {
+      // Check if cursor is hovering over a DataWeave function, context variable, or operator
+      const dwHover = buildDataWeaveHover(word, wordRange);
+      if (dwHover) {
+        return dwHover;
+      }
       return undefined;
     }
 

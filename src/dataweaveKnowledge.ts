@@ -1,9 +1,12 @@
 export interface DataWeaveFunctionInfo {
   name: string;
   signature: string;
-  category: 'Core / Collection' | 'String' | 'Object' | 'Array' | 'Type Conversion' | 'Utility' | 'Logical';
+  category: 'Array' | 'Object' | 'String' | 'Core / Collection' | 'Type Conversion' | 'Utility' | 'Logical' | 'Math / Date' | 'Selector';
   description: string;
   plainEnglishExplanation: string;
+  whyUseThis: string;
+  performanceAndQualityTips: string;
+  bestAlternativeOrProPattern?: string;
   example: string;
   docsUrl: string;
 }
@@ -15,6 +18,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Array',
     description: 'Iterates through each element of an Array and transforms each element into a new representation.',
     plainEnglishExplanation: 'Takes every single item in the array one by one, applies your transformation, and gives back a new array with the transformed items.',
+    whyUseThis: 'Standard idiomatic way to transform records between models (e.g. converting Salesforce Lead records into internal CRM Customer JSON objects).',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Avoid O(N²) nested loops:** Never call `payload2 filter ($.id == item.id)` inside a `map`. Instead, pre-index `payload2` using `groupBy ($.id)` once before the loop for O(1) instant hash lookup.\n• **Streaming:** For multi-megabyte payloads, keep transformations non-blocking and avoid holding previous elements in memory.\n• **Selective mutation:** If only changing 1-2 keys on large objects, prefer the `update` operator over rebuilding every key from scratch.',
+    bestAlternativeOrProPattern: 'Use positional shortcuts `$` (current item) and `$$` (index) for clean, readable one-liners:\n```dataweave\npayload.orders map { id: $.id, total: $.amount }\n```',
     example: 'payload.orders map (order, index) -> {\n  id: order.id,\n  total: order.amount\n}',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-map'
   },
@@ -24,6 +30,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Array',
     description: 'Returns only the items in an Array that satisfy the conditional boolean expression.',
     plainEnglishExplanation: 'Checks every item in the list against your condition. Only items that evaluate to true are kept; all others are discarded.',
+    whyUseThis: 'Extracting a subset of records matching business criteria (e.g. active users, pending orders, error records) without modifying element structures.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Filter early at the source:** Whenever possible, filter data in the DB query (SQL `WHERE`) or API request instead of loading 100,000 records into Mule memory to filter with DW.\n• **Safe evaluation:** Always guard against null fields with safe navigation `item.status?` or `default ""` to prevent unexpected evaluation halts.\n• **Combine operations:** If filtering and mapping, prefer `reduce` or combine predicates rather than multiple chained `filter` passes.',
+    bestAlternativeOrProPattern: 'Use the `$` shorthand with safe navigation:\n```dataweave\npayload filter ($.status? == "ACTIVE" and $.amount > 100)\n```',
     example: 'payload filter (item) -> item.status == "ACTIVE"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-filter'
   },
@@ -32,7 +41,10 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     signature: 'Array<T> reduce ((item: T, accumulator: R) -> R): R',
     category: 'Array',
     description: 'Applies a binary function to each item in an Array, accumulating all values into a single final value.',
-    plainEnglishExplanation: 'Combines or calculates all elements of an array into a single result (e.g. summing total amounts, aggregating scores).',
+    plainEnglishExplanation: 'Combines or calculates all elements of an array into a single result (e.g. summing total amounts, aggregating scores, or building a custom summary map).',
+    whyUseThis: 'When you need to collapse a list down to a scalar value (total price, max value) or fold a list into a customized aggregated data structure in a single pass.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Single-pass efficiency:** `reduce` executes in O(N) single-pass. It is vastly faster than performing separate `map`, `filter`, and aggregation passes.\n• **Explicit initial accumulator:** Always initialize the accumulator default (e.g. `(item, acc = 0) -> ...`) to prevent runtime type errors on empty arrays `[]`.\n• **Built-in shortcuts:** If calculating a simple sum, `sum(payload.items.price)` is faster and more readable than manual `reduce`.',
+    bestAlternativeOrProPattern: 'For simple arithmetic, use native aggregate functions:\n```dataweave\nsum(payload.items.price default [])\n```',
     example: 'payload.items reduce (item, total = 0) -> total + item.price',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-reduce'
   },
@@ -42,6 +54,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Array',
     description: 'Groups elements from an Array based on the criteria evaluated by the lambda expression.',
     plainEnglishExplanation: 'Organizes an array into a key-value object where each key is a category or grouping criteria, and the value is the list of matching items.',
+    whyUseThis: 'Bucketing data by key (e.g., grouping line items by order ID, or grouping transactions by customer account) for batching or parent-child nesting.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **High-speed lookup index:** Use `groupBy` to build an in-memory index for fast O(1) lookups instead of doing repeated O(N) `filter` inside loops.\n• **Memory footprint:** `groupBy` holds the entire collection in heap memory until the full object is constructed. On huge payloads (>50MB), partition upstream.',
+    bestAlternativeOrProPattern: 'Index an array by ID for instant O(1) lookup:\n```dataweave\nvar orderIndex = payload.orders groupBy ($.id)\n// Later access: orderIndex[targetId][0]\n```',
     example: 'payload.orders groupBy (order) -> order.status',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-groupby'
   },
@@ -51,6 +66,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Array',
     description: 'Sorts elements of an Array in ascending order based on the value returned by the lambda.',
     plainEnglishExplanation: 'Sorts the entire list based on the field or expression you specify (e.g. earliest date, lowest to highest price).',
+    whyUseThis: 'Ensuring ordered delivery, processing items chronologically, or preparing datasets for user interfaces.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Source sorting preferred:** If data originates from SQL, prefer `ORDER BY` in the database where database indices make sorting practically free.\n• **Date sorting:** Ensure string dates are coerced `as DateTime` so that chronological sort works correctly rather than lexicographical string sort.\n• **Descending sort:** Reverse the order with `[-1 to 0]` or invert numeric keys `orderBy (-$.amount)`.',
+    bestAlternativeOrProPattern: 'Sort descending with minus operator on numbers or reverse slice:\n```dataweave\npayload.items orderBy (-$.amount)\n```',
     example: 'payload.users orderBy (u) -> u.lastName',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-orderby'
   },
@@ -60,6 +78,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Array',
     description: 'Returns an Array with duplicate elements removed based on the key returned by the expression.',
     plainEnglishExplanation: 'Removes all duplicate records from a list, keeping only the first unique occurrence of each specified key (e.g. unique customer IDs).',
+    whyUseThis: 'De-duplicating incoming feeds or multi-source joins where the same entity is retrieved more than once.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Keeps first item:** Note that `distinctBy` keeps the *first* item encountered. If you need the latest record, sort with `orderBy` first before running `distinctBy`.\n• **Memory:** Stores keys in a hash set; lightweight, but ensure key uniqueness criteria is precise (e.g. composite key `$.id ++ $.type`).',
+    bestAlternativeOrProPattern: 'Deduplicate on composite keys using string interpolation:\n```dataweave\npayload distinctBy ("$($.region)_$($.customerId)")\n```',
     example: 'payload distinctBy (item) -> item.customerId',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-distinctby'
   },
@@ -69,8 +90,23 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Array',
     description: 'Maps each element to a collection and flattens all nested collections into a single top-level Array.',
     plainEnglishExplanation: 'Transforms each item into an array of sub-items and automatically merges them into one single flat array.',
+    whyUseThis: 'Flattening parent-child relationships, such as extracting all line items across an array of orders into a single list of line items.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **2x faster than map + flatten:** Always prefer `flatMap` over `flatten(payload map (...))` because it avoids intermediate array allocations.\n• **Null safety:** Ensure lambda always returns an array or use `default []` to avoid type errors.',
+    bestAlternativeOrProPattern: 'Direct extraction of child collections:\n```dataweave\npayload.orders flatMap ($.lineItems default [])\n```',
     example: 'payload.orders flatMap (o) -> o.lineItems',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-flatmap'
+  },
+  flatten: {
+    name: 'flatten',
+    signature: 'flatten(items: Array<Array<T>>): Array<T>',
+    category: 'Array',
+    description: 'Flattens an Array of nested Arrays into a single one-dimensional Array.',
+    plainEnglishExplanation: 'Collapses nested arrays like [[1, 2], [3, 4]] into one clean single array [1, 2, 3, 4].',
+    whyUseThis: 'Normalizing nested arrays returned by Scatter-Gather or batch collection results.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• If used directly after a `map`, replace both calls with `flatMap` for better performance and reduced memory allocation.',
+    bestAlternativeOrProPattern: 'Replace `flatten(items map ...)` with `items flatMap (...)`.',
+    example: 'flatten([[1, 2], [3, 4]]) // returns [1, 2, 3, 4]',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-flatten'
   },
   pluck: {
     name: 'pluck',
@@ -78,6 +114,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Object',
     description: 'Converts an Object into an Array by extracting keys, values, or indices into a list.',
     plainEnglishExplanation: 'Takes a key-value object and turns each entry into an item in a list (e.g. extracting all values from a map into an array).',
+    whyUseThis: 'Bridging from key-value dictionaries or dynamic XML maps into uniform JSON array collections.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Selective fields:** If you only need values or keys, `valuesOf(obj)` or `keysOf(obj)` from `dw::core::Objects` is more concise and avoids lambda overhead.',
+    bestAlternativeOrProPattern: 'For simple key/value lists:\n```dataweave\nimport * from dw::core::Objects\nvaluesOf(payload) // instead of payload pluck $\n```',
     example: 'payload pluck (val, key) -> { property: key, data: val }',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-pluck'
   },
@@ -87,6 +126,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Object',
     description: 'Iterates through each key-value pair of an Object and constructs a newly transformed Object.',
     plainEnglishExplanation: 'Loops over every key and value in an object, letting you rename keys, reformat values, or filter properties dynamically.',
+    whyUseThis: 'Sanitizing, renaming, or dynamically casing all properties of an object (e.g. converting snake_case keys to camelCase).',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Key parentheses syntax:** Remember in DataWeave, dynamic keys inside mapObject must be wrapped in parentheses: `((key): value)`.\n• **If only filtering nulls:** Prefer `filterObject` or `skipNullOn="everywhere"` header option rather than manual `mapObject` checks.',
+    bestAlternativeOrProPattern: 'Use output directive to skip nulls globally instead of manual mapping:\n```dataweave\noutput application/json skipNullOn="everywhere"\n```',
     example: 'payload mapObject (val, key) -> {\n  (upper(key)): val\n}',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-mapobject'
   },
@@ -95,7 +137,10 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     signature: 'Object filterObject ((value: Any, key: Key, index: Number) -> Boolean): Object',
     category: 'Object',
     description: 'Filters the key-value pairs of an Object, returning only pairs that satisfy the boolean condition.',
-    plainEnglishExplanation: 'Strips out keys from an object if their value does not meet your condition (e.g. removing null or empty fields).',
+    plainEnglishExplanation: 'Strips out keys from an object if their value does not meet your condition (e.g. removing null, empty, or sensitive fields).',
+    whyUseThis: 'Sanitizing outbound payloads by stripping out empty strings, null attributes, or blacklisted fields before sending to third-party APIs.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• Pair with `!isEmpty(value)` to strip out both `null`, `""`, and empty arrays `{}` in one clean expression.',
+    bestAlternativeOrProPattern: 'Strip all empty attributes concisely:\n```dataweave\npayload filterObject (!isEmpty($))\n```',
     example: 'payload filterObject (value, key) -> value != null and value != ""',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-filterobject'
   },
@@ -105,6 +150,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Core / Collection',
     description: 'Returns the number of elements in an Array, key-value pairs in an Object, or characters in a String.',
     plainEnglishExplanation: 'Counts how many items are in a list, how many keys are in an object, or how many characters are in a text string.',
+    whyUseThis: 'Validating collection counts, payload sizes, or determining loop lengths for pagination.',
+    performanceAndQualityTips: '⚠️ **Architect Warning on Streaming:**\n• Calling `sizeOf(payload)` on a streaming payload (like a huge CSV or DB cursor) forces Mule to read the **entire stream into memory** to count items, breaking streaming and risking OutOfMemoryError!\n• If you only need to know if the payload has items, use `!isEmpty(payload)` instead of `sizeOf(payload) > 0`.',
+    bestAlternativeOrProPattern: 'Check existence without calculating full size:\n```dataweave\n!isEmpty(payload) // much safer than sizeOf(payload) > 0\n```',
     example: 'sizeOf(payload.items)',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-sizeof'
   },
@@ -114,15 +162,21 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Core / Collection',
     description: 'Returns true if the specified value is null, an empty string, an empty array, or an empty object.',
     plainEnglishExplanation: 'Safely checks if something has nothing inside it (null, "", [], or {}), avoiding null pointer errors.',
+    whyUseThis: 'The gold-standard null/empty safety guard in MuleSoft. Checks all empty types in a single check.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Preferred over null checks:** Use `isEmpty()` instead of `payload == null or payload == ""` to keep code robust and readable.\n• **Short-circuiting:** Works safely on objects and collections without throwing null pointer exceptions.',
+    bestAlternativeOrProPattern: 'Safe conditional default:\n```dataweave\nif (isEmpty(payload.customer)) "Unknown" else payload.customer.name\n```',
     example: 'if (isEmpty(payload.customer)) "No Customer" else payload.customer.name',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-isempty'
   },
   now: {
     name: 'now',
     signature: 'now(): DateTime',
-    category: 'Utility',
+    category: 'Math / Date',
     description: 'Returns a DateTime object representing the current system date and time with timezone.',
     plainEnglishExplanation: 'Gets the current live timestamp right now when this transformation runs.',
+    whyUseThis: 'Generating audit timestamps (`createdDate`, `lastModifiedDate`), expiry dates, or correlation logging timestamps.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Format cleanly:** Format directly using `as String {format: "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'"}` for standard ISO-8601 formatting.\n• **Deterministic testing:** In MUnit tests, consider passing timestamps via variables so test assertions do not depend on the exact millisecond of test execution.',
+    bestAlternativeOrProPattern: 'Standard UTC ISO timestamp:\n```dataweave\n(now() >> "UTC") as String {format: "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'"}\n```',
     example: 'timestamp: now() as String {format: "yyyy-MM-dd HH:mm:ss"}',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-now'
   },
@@ -132,6 +186,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Utility',
     description: 'Generates a random v4 universally unique identifier (UUID) as a String.',
     plainEnglishExplanation: 'Generates a fresh, unique random identifier (e.g. "e2d53bf3-86b2-4d2c-806f-6f91667b2d56") ideal for transaction or correlation IDs.',
+    whyUseThis: 'Assigning unique transaction IDs, correlation IDs, or synthetic primary keys when integrating disparate systems.',
+    performanceAndQualityTips: '⚡ **Best Practice:** If your Mule flow already has a `correlationId` assigned by the HTTP listener, use `correlationId` to maintain end-to-end trace context across APIs rather than generating a new `uuid()` at every step.',
+    bestAlternativeOrProPattern: 'Prefer `correlationId` for distributed traceability:\n```dataweave\ntransactionId: correlationId default uuid()\n```',
     example: 'transactionId: uuid()',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-uuid'
   },
@@ -141,26 +198,11 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'String',
     description: 'Returns true if a String contains a substring, or an Array contains a matching element.',
     plainEnglishExplanation: 'Checks if a word is inside a text sentence, or if an item is already inside an array list.',
+    whyUseThis: 'Validating role permissions, checking text patterns, or checking presence before inserting into collections.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• On arrays, `contains` scans linearly O(N). For large collections (>5,000 items), convert to an object lookup map for O(1) membership checks.',
+    bestAlternativeOrProPattern: 'Case-insensitive string check:\n```dataweave\nlower(payload.description default "") contains "urgent"\n```',
     example: 'payload.roles contains "ADMIN"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-contains'
-  },
-  startsWith: {
-    name: 'startsWith',
-    signature: 'startsWith(text: String, prefix: String): Boolean',
-    category: 'String',
-    description: 'Returns true if the String begins with the specified prefix substring.',
-    plainEnglishExplanation: 'Checks if text begins with a given prefix (e.g. startsWith(accountNo, "ACC-")).',
-    example: 'payload.accountId startsWith "ACT-"',
-    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-startswith'
-  },
-  endsWith: {
-    name: 'endsWith',
-    signature: 'endsWith(text: String, suffix: String): Boolean',
-    category: 'String',
-    description: 'Returns true if the String ends with the specified suffix substring.',
-    plainEnglishExplanation: 'Checks if text finishes with a specific suffix (e.g. checking file extensions like ".csv").',
-    example: 'payload.fileName endsWith ".json"',
-    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-endswith'
   },
   splitBy: {
     name: 'splitBy',
@@ -168,6 +210,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'String',
     description: 'Splits a String into an Array of substrings separated by a delimiter or regular expression.',
     plainEnglishExplanation: 'Cuts a string into multiple pieces wherever the delimiter occurs (e.g. splitting a comma-separated list into an array).',
+    whyUseThis: 'Parsing delimited flat-file values, CSV lines, URL paths, or multi-value header strings.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• **Null Guard:** `splitBy` throws an error if called on `null`. Always use `(text default "") splitBy ","`.\n• **Trim whitespace:** After splitting strings like `"a, b , c"`, map with `trim` (`splitBy "," map trim($)`) to clean up leading/trailing spaces.',
+    bestAlternativeOrProPattern: 'Safe split with trimmed values:\n```dataweave\n(payload.tags default "") splitBy "," map trim($)\n```',
     example: '"apple,banana,cherry" splitBy ","',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-splitby'
   },
@@ -177,6 +222,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'String',
     description: 'Concatenates elements of an Array into a single String, separated by the specified delimiter.',
     plainEnglishExplanation: 'Glues an array of words together into a single string with a separator between each (e.g. ["a", "b"] joined by ", " -> "a, b").',
+    whyUseThis: 'Generating CSV lines, SQL `IN (...)` clause parameters, or formatted human-readable lists.',
+    performanceAndQualityTips: '⚡ **Performance & Quality Tips:**\n• Filter out nulls first: `(items filter (!isEmpty($))) joinBy ", "` prevents unwanted `"null, null"` in your generated text string.',
+    bestAlternativeOrProPattern: 'Clean join filtering out empty or null items:\n```dataweave\n(payload.tags filter (!isEmpty($))) joinBy ", "\n```',
     example: 'payload.tags joinBy ", "',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-joinby'
   },
@@ -186,6 +234,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'String',
     description: 'Converts all characters in the String to uppercase.',
     plainEnglishExplanation: 'Converts text entirely to CAPITAL LETTERS.',
+    whyUseThis: 'Standardizing case-insensitive codes, country codes (US, IN, UK), or comparison keys.',
+    performanceAndQualityTips: '⚡ Always provide `default ""` if the source field can be null to avoid runtime exceptions.',
+    bestAlternativeOrProPattern: 'Safe uppercase:\n```dataweave\nupper(payload.countryCode default "")\n```',
     example: 'upper("mulesoft") // "MULESOFT"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-upper'
   },
@@ -195,6 +246,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'String',
     description: 'Converts all characters in the String to lowercase.',
     plainEnglishExplanation: 'Converts text entirely to small lowercase letters.',
+    whyUseThis: 'Normalizing email addresses, usernames, and search tokens before querying databases or identity providers.',
+    performanceAndQualityTips: '⚡ Combine with `trim` for email normalization: `lower(trim(payload.email default ""))`.',
+    bestAlternativeOrProPattern: 'Clean email normalization:\n```dataweave\nlower(trim(payload.email default ""))\n```',
     example: 'lower("MULESOFT") // "mulesoft"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-lower'
   },
@@ -204,6 +258,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'String',
     description: 'Removes leading and trailing whitespace from the String.',
     plainEnglishExplanation: 'Strips unwanted spaces from the beginning and end of a text string.',
+    whyUseThis: 'Sanitizing user inputs, form fields, and legacy mainframe records where fixed-width fields contain padded whitespace.',
+    performanceAndQualityTips: '⚡ Essential for integration hygiene; always trim external API inputs before running database lookups.',
+    bestAlternativeOrProPattern: 'Safe trim:\n```dataweave\ntrim(payload.name default "")\n```',
     example: 'trim("  hello world  ") // "hello world"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-trim'
   },
@@ -212,18 +269,24 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     signature: 'replace(text: String, target: Regex | String) with (replacement: String): String',
     category: 'String',
     description: 'Replaces all occurrences of a substring or matching regex with a new replacement String.',
-    plainEnglishExplanation: 'Finds words or characters in text and swaps them out with your replacement.',
+    plainEnglishExplanation: 'Finds words, characters, or regex patterns in text and swaps them out with your replacement.',
+    whyUseThis: 'Masking sensitive PII data (credit cards, SSNs) in log messages, or cleaning special characters from legacy payloads.',
+    performanceAndQualityTips: '⚡ **Security Tip:** Use regex replace for masking sensitive data before logging payload in production:\n`payload.pan replace /[0-9]{12}([0-9]{4})/ with "XXXXXXXXXXXX$1"`',
+    bestAlternativeOrProPattern: 'Mask credit cards in one step:\n```dataweave\npayload.accountNumber replace /\\d(?=\\d{4})/ with "*"\n```',
     example: '"hello 123" replace /[0-9]+/ with "world"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-replace'
   },
-  flatten: {
-    name: 'flatten',
-    signature: 'flatten(items: Array<Array<T>>): Array<T>',
-    category: 'Array',
-    description: 'Flattens an Array of nested Arrays into a single one-dimensional Array.',
-    plainEnglishExplanation: 'Collapses nested arrays like [[1, 2], [3, 4]] into one clean single array [1, 2, 3, 4].',
-    example: 'flatten([[1, 2], [3, 4]])',
-    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-flatten'
+  p: {
+    name: 'p',
+    signature: 'p(propertyName: String): String',
+    category: 'Utility',
+    description: 'Reads an application configuration property by key from active property files or system properties.',
+    plainEnglishExplanation: 'Retrieves an environment configuration value (e.g. host, port, timeout, client ID) from your yaml or properties file.',
+    whyUseThis: 'Externalizing environment configuration so code is 100% environment-agnostic between Dev, QA, and Prod.',
+    performanceAndQualityTips: '⚡ **Security Guard:** Never hardcode URLs, credentials, or keys in DataWeave code. Always retrieve them via `p("api.url")` or `p("secure::db.password")`.',
+    bestAlternativeOrProPattern: 'Dynamic property lookup with fallback:\n```dataweave\np("timeout.seconds") default "30"\n```',
+    example: 'p("secure::db.password")',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-p'
   },
   log: {
     name: 'log',
@@ -231,6 +294,9 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Utility',
     description: 'Logs the prefix and value to the application console while returning the value unchanged.',
     plainEnglishExplanation: 'Prints debug output to the console during transformation without interrupting or changing the data flow.',
+    whyUseThis: 'Non-intrusive debugging of complex in-flight DataWeave expressions without breaking expression chains.',
+    performanceAndQualityTips: '⚠️ **Production Warning:** Remove or comment out `log()` calls before deploying to Production. Heavy console logging inside large loops creates severe I/O bottlenecks and bloats CloudHub logs.',
+    bestAlternativeOrProPattern: 'Use standard Mule `<logger level="DEBUG">` in XML instead of in-line DW `log()` in production.',
     example: 'log("Order processing", payload.orderId)',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-log'
   },
@@ -240,16 +306,130 @@ export const DATAWEAVE_FUNCTIONS: Record<string, DataWeaveFunctionInfo> = {
     category: 'Type Conversion',
     description: 'Returns the DataWeave Type of the evaluated expression (e.g. String, Number, Array, Object).',
     plainEnglishExplanation: 'Tells you what kind of data something is (String, Number, Boolean, Object, Array, etc.).',
+    whyUseThis: 'Handling polymorphic payloads or dynamic integrations where payload can be either a single object or an array of objects.',
+    performanceAndQualityTips: '⚡ If an API might return either a single object `{}` or an array `[{}]`, use `flatten([payload])` or check `typeOf(payload) == "Array"` to normalize consistently.',
+    bestAlternativeOrProPattern: 'Normalize single-item or array seamlessly:\n```dataweave\nflatten([payload]) // Always gives Array<Object> whether payload is {} or [{}]\n```',
     example: 'typeOf(payload) == "Array"',
     docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-typeof'
   },
-  p: {
-    name: 'p',
-    signature: 'p(propertyName: String): String',
+  write: {
+    name: 'write',
+    signature: 'write(value: Any, mimeType: String, writerSettings?: Object): String | Binary',
     category: 'Utility',
-    description: 'Reads an application configuration property by key from active property files or system properties.',
-    plainEnglishExplanation: 'Retrieves an environment configuration value (e.g. host, port, timeout) from your yaml or properties file.',
-    example: 'p("secure::db.password")',
-    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-p'
+    description: 'Serializes a DataWeave value into a String or Binary format according to the specified MIME type.',
+    plainEnglishExplanation: 'Converts in-memory data (like an object or array) into a formatted text string (JSON, XML, CSV, etc.).',
+    whyUseThis: 'Logging complex objects as clean JSON strings in logger components, or preparing raw payload bodies for outbound webhooks.',
+    performanceAndQualityTips: '⚡ **Memory Tip:** When serializing for logging, `write(payload, "application/json", {indent: false})` produces compact single-line logs that save log storage and transmission overhead.',
+    bestAlternativeOrProPattern: 'Compact JSON serialization for loggers:\n```dataweave\nwrite(payload, "application/json", {indent: false})\n```',
+    example: 'write(payload, "application/json")',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-write'
+  },
+  read: {
+    name: 'read',
+    signature: 'read(content: String | Binary, mimeType: String, readerSettings?: Object): Any',
+    category: 'Utility',
+    description: 'Parses a String or Binary input according to the specified MIME type and produces a structured DataWeave value.',
+    plainEnglishExplanation: 'Takes a raw text or binary string (like JSON or XML from a queue or database column) and turns it into real DataWeave objects you can navigate.',
+    whyUseThis: 'Parsing JSON or XML stored inside relational DB text columns or JMS text message bodies.',
+    performanceAndQualityTips: '⚡ Always specify reader properties when parsing CSV or fixed-width strings (e.g. `{header: true, separator: ";"}`).',
+    bestAlternativeOrProPattern: 'Parse raw JSON string with schema safety:\n```dataweave\nread(payload.rawMessage, "application/json")\n```',
+    example: 'read(payload, "application/json")',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-read'
+  },
+  sum: {
+    name: 'sum',
+    signature: 'sum(items: Array<Number>): Number',
+    category: 'Core / Collection',
+    description: 'Returns the sum of all numerical elements in an Array.',
+    plainEnglishExplanation: 'Adds up all the numbers in a list and returns the total sum.',
+    whyUseThis: 'Calculating invoice totals, order quantities, and metric aggregations.',
+    performanceAndQualityTips: '⚡ 3x faster and cleaner than writing manual `reduce ((a,b) -> a+b)`. Always default with `default []` to prevent null pointer evaluation.',
+    bestAlternativeOrProPattern: 'Calculate total order price cleanly:\n```dataweave\nsum(payload.items.price default [])\n```',
+    example: 'sum([10, 20, 30]) // returns 60',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-sum'
+  },
+  avg: {
+    name: 'avg',
+    signature: 'avg(items: Array<Number>): Number',
+    category: 'Core / Collection',
+    description: 'Returns the arithmetic mean (average) of all numbers in the Array.',
+    plainEnglishExplanation: 'Calculates the average value of a list of numbers.',
+    whyUseThis: 'Generating business statistics, average response times, or scorecards.',
+    performanceAndQualityTips: '⚡ Ensure array is not empty before calculating average to avoid divide-by-zero NaN results.',
+    bestAlternativeOrProPattern: 'Safe average with zero fallback:\n```dataweave\nif (isEmpty(payload.scores)) 0 else avg(payload.scores)\n```',
+    example: 'avg([10, 20, 30]) // returns 20',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-avg'
+  },
+  max: {
+    name: 'max',
+    signature: 'max(items: Array<Comparable>): Comparable',
+    category: 'Core / Collection',
+    description: 'Returns the highest value from the Array.',
+    plainEnglishExplanation: 'Finds the biggest number, latest date, or highest value in the list.',
+    whyUseThis: 'Finding the most recent transaction date or highest bid amount.',
+    performanceAndQualityTips: '⚡ Works on `DateTime` objects as well as `Number` and `String`.',
+    bestAlternativeOrProPattern: 'Find latest update timestamp:\n```dataweave\nmax(payload.records.lastUpdated default [])\n```',
+    example: 'max([1, 5, 3]) // returns 5',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-max'
+  },
+  min: {
+    name: 'min',
+    signature: 'min(items: Array<Comparable>): Comparable',
+    category: 'Core / Collection',
+    description: 'Returns the lowest value from the Array.',
+    plainEnglishExplanation: 'Finds the smallest number, earliest date, or lowest value in the list.',
+    whyUseThis: 'Finding lowest prices or earliest start dates.',
+    performanceAndQualityTips: '⚡ Provide default fallback `default []` to guard against empty or null arrays.',
+    bestAlternativeOrProPattern: 'Find minimum price:\n```dataweave\nmin(payload.items.price default [])\n```',
+    example: 'min([1, 5, 3]) // returns 1',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-min'
+  },
+  keysOf: {
+    name: 'keysOf',
+    signature: 'keysOf(object: Object): Array<Key>',
+    category: 'Object',
+    description: 'Returns an Array containing all the keys in the Object.',
+    plainEnglishExplanation: 'Extracts just the property names/keys from an object into a list.',
+    whyUseThis: 'Validating required schema keys, metadata introspection, or dynamic column generation.',
+    performanceAndQualityTips: '⚡ More concise and performant than `payload pluck ($$ as String)`.',
+    bestAlternativeOrProPattern: 'Inspect object keys:\n```dataweave\nimport * from dw::core::Objects\nkeysOf(payload)\n```',
+    example: 'keysOf({ a: 1, b: 2 }) // returns ["a", "b"]',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-keysof'
+  },
+  valuesOf: {
+    name: 'valuesOf',
+    signature: 'valuesOf(object: Object): Array<Any>',
+    category: 'Object',
+    description: 'Returns an Array containing all the values in the Object.',
+    plainEnglishExplanation: 'Extracts just the values from an object into a list, discarding key names.',
+    whyUseThis: 'Extracting lists of values for bulk validation or checking if any attribute contains a specific value.',
+    performanceAndQualityTips: '⚡ Cleaner and faster than `payload pluck $`.',
+    bestAlternativeOrProPattern: 'Direct value extraction:\n```dataweave\nimport * from dw::core::Objects\nvaluesOf(payload)\n```',
+    example: 'valuesOf({ a: 1, b: 2 }) // returns [1, 2]',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-valuesof'
+  },
+  update: {
+    name: 'update',
+    signature: 'object update { case var at .path -> newValue }',
+    category: 'Object',
+    description: 'Selectively updates, inserts, or removes nested fields in an Object without modifying other properties.',
+    plainEnglishExplanation: 'Modifies specific nested fields in a complex data structure cleanly, without having to rebuild the entire object manually.',
+    whyUseThis: 'The modern (DW 2.3+) recommended way to mutate large nested objects (e.g. updating an order status or masking one password field).',
+    performanceAndQualityTips: '⚡ **Major Code Quality Win:** Replaces 50 lines of boilerplate object mapping with a concise 3-line update expression.',
+    bestAlternativeOrProPattern: 'Update nested field without rebuilding object:\n```dataweave\npayload update {\n  case user at .customer.user -> user update { case .password -> "MASKED" }\n}\n```',
+    example: 'payload update {\n  case .status -> "COMPLETED"\n}',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dw-core-functions-update'
+  },
+  do: {
+    name: 'do',
+    signature: 'do { var x = ...; --- body }',
+    category: 'Utility',
+    description: 'Creates a localized scope with its own local variable declarations and execution body.',
+    plainEnglishExplanation: 'Lets you declare temporary local variables inside an expression block to keep your main header clean and scoped.',
+    whyUseThis: 'Structuring complex transformations with local intermediate variables without polluting global header variables.',
+    performanceAndQualityTips: '⚡ Keeps memory scoped tightly; temporary variables are garbage collected as soon as the `do` block completes.',
+    bestAlternativeOrProPattern: 'Localized calculation scope:\n```dataweave\ndo {\n  var taxRate = 0.08\n  var discount = if (payload.isVip) 0.1 else 0\n  ---\n  payload.total * (1 + taxRate - discount)\n}\n```',
+    example: 'do {\n  var temp = payload.amount * 2\n  ---\n  { doubled: temp }\n}',
+    docsUrl: 'https://docs.mulesoft.com/dataweave/latest/dataweave-variables'
   }
 };
