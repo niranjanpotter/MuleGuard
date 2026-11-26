@@ -202,26 +202,37 @@ export class FlowExplorerProvider implements vscode.TreeDataProvider<FlowTreeIte
         const flows = extractFlows(masked);
 
         const flowItems: FlowTreeItem[] = [];
+        const seenFlows = new Set<string>();
         for (const flow of flows) {
-          const lines = content.slice(0, flow.openTagStart).split('\n');
-          const lineNum = lines.length - 1;
-          flowItems.push(new FlowTreeItem(flow.name || 'unnamed-flow', 'FLOW', vscode.TreeItemCollapsibleState.None, uri, lineNum, '⚡ Flow'));
+          const flowName = flow.name || 'unnamed-flow';
+          if (!seenFlows.has(flowName.toLowerCase())) {
+            seenFlows.add(flowName.toLowerCase());
+            const lines = content.slice(0, flow.openTagStart).split('\n');
+            const lineNum = lines.length - 1;
+            flowItems.push(new FlowTreeItem(flowName, 'FLOW', vscode.TreeItemCollapsibleState.None, uri, lineNum, '⚡ Flow'));
+          }
         }
 
-        // Sub-flows
+        // Sub-flows with deduplication
         const subFlowRegex = /<sub-flow\s+name=["']([^"']+)["']/gi;
         let subMatch: RegExpExecArray | null;
         while ((subMatch = subFlowRegex.exec(masked)) !== null) {
-          const lines = content.slice(0, subMatch.index).split('\n');
-          const lineNum = lines.length - 1;
-          flowItems.push(new FlowTreeItem(subMatch[1], 'SUB_FLOW', vscode.TreeItemCollapsibleState.None, uri, lineNum, '↪ Sub-Flow'));
+          const subName = subMatch[1];
+          if (!seenFlows.has(subName.toLowerCase())) {
+            seenFlows.add(subName.toLowerCase());
+            const lines = content.slice(0, subMatch.index).split('\n');
+            const lineNum = lines.length - 1;
+            flowItems.push(new FlowTreeItem(subName, 'SUB_FLOW', vscode.TreeItemCollapsibleState.None, uri, lineNum, '↪ Sub-Flow'));
+          }
         }
 
-        // Associated DWL files (matching name or referenced inside XML)
+        // Associated DWL files (matching name or referenced inside XML) with deduplication
         const dwlItems: FlowTreeItem[] = [];
+        const seenDwl = new Set<string>();
         for (const dwlUri of dwlUris) {
           const dwlName = path.basename(dwlUri.fsPath);
-          if (content.includes(dwlName) || dwlName.toLowerCase().includes(baseName.toLowerCase())) {
+          if (!seenDwl.has(dwlName.toLowerCase()) && (content.includes(dwlName) || dwlName.toLowerCase().includes(baseName.toLowerCase()))) {
+            seenDwl.add(dwlName.toLowerCase());
             dwlItems.push(new FlowTreeItem(dwlName, 'DWL', vscode.TreeItemCollapsibleState.None, dwlUri, undefined, 'DataWeave Transform'));
           }
         }
@@ -266,16 +277,45 @@ export class FlowExplorerProvider implements vscode.TreeDataProvider<FlowTreeIte
 
   private async _buildGlobalConfigs(): Promise<FlowTreeItem> {
     const configRoot = new FlowTreeItem('⚙️ Global Configurations & Environments', 'CATEGORY', vscode.TreeItemCollapsibleState.Collapsed);
-    const configUris = await vscode.workspace.findFiles('**/src/main/resources/**/*.{yaml,properties}', '**/node_modules/**');
-    const items = configUris.map(u => new FlowTreeItem(path.basename(u.fsPath), 'CONFIG', vscode.TreeItemCollapsibleState.None, u, undefined, 'Configuration'));
+    const configUris = await vscode.workspace.findFiles('**/*.{yaml,properties}', '{**/node_modules/**,**/target/**,**/.git/**}');
+    
+    // Strict deduplication by normalized lowercase path and file name
+    const seenPaths = new Set<string>();
+    const seenNames = new Set<string>();
+    const items: FlowTreeItem[] = [];
+
+    for (const u of configUris) {
+      const normalizedPath = path.normalize(u.fsPath).toLowerCase();
+      const baseName = path.basename(u.fsPath);
+      
+      // Prevent both physical path and duplicate file name duplication
+      if (!seenPaths.has(normalizedPath) && !seenNames.has(baseName.toLowerCase())) {
+        seenPaths.add(normalizedPath);
+        seenNames.add(baseName.toLowerCase());
+        items.push(new FlowTreeItem(baseName, 'CONFIG', vscode.TreeItemCollapsibleState.None, u, undefined, 'Configuration'));
+      }
+    }
+
     configRoot.children = items.length > 0 ? items : [new FlowTreeItem('No configuration files', 'CONFIG', vscode.TreeItemCollapsibleState.None)];
     return configRoot;
   }
 
   private async _buildMUnitSuites(): Promise<FlowTreeItem> {
     const testRoot = new FlowTreeItem('🧪 Test Automation & MUnit Suites', 'CATEGORY', vscode.TreeItemCollapsibleState.Collapsed);
-    const munitUris = await vscode.workspace.findFiles('**/src/test/munit/**/*.xml', '**/node_modules/**');
-    const items = munitUris.map(u => new FlowTreeItem(path.basename(u.fsPath), 'MUNIT', vscode.TreeItemCollapsibleState.None, u, undefined, 'Test Suite'));
+    const munitUris = await vscode.workspace.findFiles('**/src/test/munit/**/*.xml', '{**/node_modules/**,**/target/**,**/.git/**}');
+    
+    // Strict deduplication
+    const seen = new Set<string>();
+    const items: FlowTreeItem[] = [];
+
+    for (const u of munitUris) {
+      const baseName = path.basename(u.fsPath);
+      if (!seen.has(baseName.toLowerCase())) {
+        seen.add(baseName.toLowerCase());
+        items.push(new FlowTreeItem(baseName, 'MUNIT', vscode.TreeItemCollapsibleState.None, u, undefined, 'Test Suite'));
+      }
+    }
+
     testRoot.children = items.length > 0 ? items : [new FlowTreeItem('No MUnit test suites found', 'MUNIT', vscode.TreeItemCollapsibleState.None)];
     return testRoot;
   }
