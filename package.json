@@ -2,7 +2,7 @@
   "name": "muleguard",
   "displayName": "MuleGuard -- MuleSoft Code Review",
   "description": "Real-time linting, security scanning, connector & DataWeave hover intelligence, and structured code review for MuleSoft Mule 4 applications.",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "publisher": "niranjanpotter",
   "license": "MIT",
   "icon": "icon.png",

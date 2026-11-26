@@ -5,19 +5,16 @@ All notable changes to **MuleGuard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.4] - 2026-11-26
-### Added
-- **Architect-Grade DataWeave Hover & Logic Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `flatMap`, `flatten`, `pluck`, `mapObject`, `filterObject`, `sizeOf`, `isEmpty`, `write`, `read`, `update`, `do`, `p`, etc.) now reveals:
-  - 📖 **Core Logic & Purpose**: Exactly what the transformation calculates.
+## [1.0.3] - 2026-11-26
+### Added & Improved
+- **Architect-Grade DataWeave Hover & Logic Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `flatMap`, `flatten`, `pluck`, `mapObject`, `filterObject`, `sizeOf`, `isEmpty`, `write`, `read`, `sum`, `avg`, `min`, `max`, `update`, `do`, `p`, etc.) now reveals:
+  - 📖 **Core Logic & Purpose**: Exact calculation and transformation behavior.
   - 💡 **Plain-English Explanation**: Easy-to-understand summary for junior and senior devs.
-  - 🎯 **Why & When To Use (Architect Perspective)**: Clear architectural use-cases.
+  - 🎯 **Why & When To Use (Architect Perspective)**: Enterprise integration use-cases.
   - 🚀 **Performance Optimization & Code Quality Advice**: Prevents O(N²) nested loops, preserves streaming, avoids OutOfMemory errors on `sizeOf()`, and provides memory safety tips.
   - 💡 **Pro Patterns & Cleaner Alternatives**: Modern idiomatic alternatives (positional shortcuts `$`, `sum()`, `valuesOf()`, `update`, Elvis patterns).
 - **XML DataWeave Hover Integration:** DataWeave hover tooltips now work seamlessly inside Mule XML files (inside `<ee:transform>`, `<ee:set-payload>`, and `#[...]` MEL/DW expressions) as well as standalone `.dwl` files.
 - **Context Variables & Operator Intelligence:** Rich hover explanations for `payload` (streaming & memory), `vars` (scoping), `attributes` (metadata preservation), `error`, `correlationId`, `default`, `if/else`, and `as`.
-
-## [1.0.3] - 2026-11-26
-### Changed
 - **Clean Natural Mule Project Structure:** Reverted Flow Explorer to the clean, familiar 4-category layout (`Mule Flows & Sub-Flows`, `DataWeave Transformations`, `MUnit Test Suites`, `Environment Configs`) that automatically adapts to the project's actual XML files without artificial layers.
 - **Strict Deduplication:** Eliminated duplicate configuration files and repeated flows using canonical path hashing and filename deduplication.
 
