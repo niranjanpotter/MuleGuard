@@ -3,13 +3,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.niranjanpotter.muleguard</groupId>
+    <groupId>io.github.niranjanpotter</groupId>
     <artifactId>muleguard-parent</artifactId>
     <version>1.0.3</version>
     <packaging>pom</packaging>
 
     <name>MuleGuard Project</name>
     <description>MuleGuard - Enterprise Code Review &amp; Quality Workbench for MuleSoft</description>
+    <url>https://github.com/niranjanpotter/MuleGuard</url>
 
     <modules>
         <module>muleguard-maven-plugin</module>
