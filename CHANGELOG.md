@@ -5,6 +5,22 @@ All notable changes to **MuleGuard Pro** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-11-26
+### Changed
+- Brand new ultra-premium high-tech cyber shield logo featuring "MuleGuard by Niranjan" branding with 3D glassmorphism and cyan MuleSoft integration nodes.
+
+## [1.0.0] - 2026-11-26
+### Added
+- Enterprise 7-step Code Review engine and 45-row quality checklist (`code-review-report.md`).
+- Offline Connector Intelligence and rich hover tooltips for 58 Mule connectors.
+- Interactive Flow Visualizer WebView panel (`Ctrl+Shift+V`).
+- Mule Project Explorer TreeView sidebar.
+- 22 `mg-` Mule 4 XML snippets and 8 DataWeave snippets.
+- DataWeave 2.0 TextMate syntax highlighting.
+- Environment YAML Config Diff (`muleguard.diffEnvConfigs`).
+- Workspace Secret Scanner (`muleguard.scanSecrets`).
+- Flow Complexity and Maintainability Metrics (`muleguard.showComplexityMetrics`).
+
 ## [0.2.0] - 2026-11-24
 
 ### Added
