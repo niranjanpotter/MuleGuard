@@ -5,6 +5,12 @@ All notable changes to **MuleGuard Pro** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-26
+### Added
+- **Interactive UI Architecture & Flow Inspector:** Clicking any connector or message processor in the Flow Visualizer (`Ctrl+Shift+V`) displays a live side inspector with full XML attribute properties, threading & runtime model, plain-English summary, and payload code blocks.
+- **Executive Architecture & Delivery Review Dashboard (`muleguard.showExecutiveDashboard`):** Tailored views for Integration Architects (security posture, thread concurrency, NFRs) and Delivery Managers (automated pass rate, release readiness gates, tech debt).
+- **DataWeave File Logic Explainer (`muleguard.explainDataWeave`):** Structural AST breakdown of `.dwl` transformations showing declared variables, helper functions, and business transformation pipeline.
+
 ## [1.0.2] - 2026-11-26
 ### Added
 - **DataWeave Hover Intelligence & Plain-English Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `pluck`, `sizeOf`, `isEmpty`, `uuid`, etc.) or context variable (`payload`, `vars`, `attributes`, `default`, `if/else`) inside `.dwl` or `<ee:transform>` displays a human-readable explanation, type signature, and live example.

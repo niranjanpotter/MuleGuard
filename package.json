@@ -2,7 +2,7 @@
   "name": "muleguard",
   "displayName": "MuleGuard -- MuleSoft Code Review",
   "description": "Real-time linting, security scanning, connector & DataWeave hover intelligence, and structured code review for MuleSoft Mule 4 applications.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "publisher": "niranjanpotter",
   "license": "MIT",
   "icon": "icon.png",
@@ -111,6 +111,16 @@
       {
         "command": "muleguard.showComplexityMetrics",
         "title": "MuleGuard: Calculate Flow Complexity Metrics",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.showExecutiveDashboard",
+        "title": "MuleGuard: Open Executive Architecture & Delivery Review Dashboard",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.explainDataWeave",
+        "title": "MuleGuard: Explain DataWeave File Logic",
         "category": "MuleGuard"
       },
       {

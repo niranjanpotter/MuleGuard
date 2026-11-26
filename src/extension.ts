@@ -12,6 +12,8 @@ import { FlowExplorerProvider } from './flowExplorer';
 import { FlowVisualizerPanel } from './flowVisualizer';
 import { MuleGuardHoverProvider, MULE_XML_SELECTOR } from './hoverProvider';
 import { DataWeaveHoverProvider, DATAWEAVE_SELECTOR } from './dataweaveHoverProvider';
+import { explainDataWeaveFile } from './dataweaveExplainer';
+import { ExecutiveReviewPanel } from './executiveReview';
 import { calculateComplexityMetrics, compareEnvConfigs, runSecretScanner } from './tooling';
 
 const CHANGE_DEBOUNCE_MS = 250;
@@ -338,6 +340,22 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  // Executive Architecture & Delivery Review
+  const executiveReviewDisposable = vscode.commands.registerCommand(
+    'muleguard.showExecutiveDashboard',
+    async () => {
+      await ExecutiveReviewPanel.createOrShow(context.extensionUri);
+    }
+  );
+
+  // DataWeave Logic Explainer
+  const explainDwlDisposable = vscode.commands.registerCommand(
+    'muleguard.explainDataWeave',
+    async () => {
+      await explainDataWeaveFile();
+    }
+  );
+
   const timerCleanupDisposable = new vscode.Disposable(() => {
     clearAllTimers();
   });
@@ -371,6 +389,8 @@ export function activate(context: vscode.ExtensionContext): void {
     envDiffDisposable,
     secretScannerDisposable,
     complexityMetricsDisposable,
+    executiveReviewDisposable,
+    explainDwlDisposable,
     scanCommandDisposable,
     fixAllCommandDisposable,
     timerCleanupDisposable
