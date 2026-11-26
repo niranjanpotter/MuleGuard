@@ -117,36 +117,36 @@ export function buildDataWeaveHover(
   if (word === 'default') {
     const markdown = new vscode.MarkdownString();
     markdown.isTrusted = true;
-    markdown.appendMarkdown(`### 🛡️ DataWeave Operator: \`default\`\n\n`);
-    markdown.appendMarkdown(`**📖 Logic:** Evaluates the left expression; if the result is **null**, returns the right-hand fallback expression.\n\n`);
-    markdown.appendMarkdown(`💡 **Plain-English:** "Use this value, but if it is missing or null, use this fallback instead."\n\n`);
-    markdown.appendMarkdown(`🎯 **Why We Use It:** Prevents NullPointerExceptions and runtime transformation failures across missing fields.\n\n`);
-    markdown.appendMarkdown(`⚡ **Quality Best Practice:** Provide sensible domain defaults (`default ""` for strings, `default 0` for numbers, `default []` for arrays) to ensure predictable downstream mapping.\n\n`);
-    markdown.appendCodeblock(`payload.customer.name default "Guest"`, 'dataweave');
+    markdown.appendMarkdown('### 🛡️ DataWeave Operator: `default`\n\n');
+    markdown.appendMarkdown('**📖 Logic:** Evaluates the left expression; if the result is **null**, returns the right-hand fallback expression.\n\n');
+    markdown.appendMarkdown('💡 **Plain-English:** "Use this value, but if it is missing or null, use this fallback instead."\n\n');
+    markdown.appendMarkdown('🎯 **Why We Use It:** Prevents NullPointerExceptions and runtime transformation failures across missing fields.\n\n');
+    markdown.appendMarkdown('⚡ **Quality Best Practice:** Provide sensible domain defaults (`default ""` for strings, `default 0` for numbers, `default []` for arrays) to ensure predictable downstream mapping.\n\n');
+    markdown.appendCodeblock('payload.customer.name default "Guest"', 'dataweave');
     return new vscode.Hover(markdown, wordRange);
   }
 
   if (word === 'if' || word === 'else') {
     const markdown = new vscode.MarkdownString();
     markdown.isTrusted = true;
-    markdown.appendMarkdown(`### 🔀 DataWeave Conditional: \`if ... else\`\n\n`);
-    markdown.appendMarkdown(`**📖 Logic:** Conditional ternary expression. Evaluates boolean condition and executes either the `if` branch or `else` branch.\n\n`);
-    markdown.appendMarkdown(`💡 **Plain-English:** "If condition is met, return Option A, otherwise return Option B."\n\n`);
-    markdown.appendMarkdown(`🎯 **Why We Use It:** Dynamic field values, conditional formatting, and branching data structures.\n\n`);
-    markdown.appendMarkdown(`⚡ **Quality Tip:** In DataWeave, `if` is an expression that must always have a matching `else` branch so that a value is always produced. If you want to omit fields when a condition is false, use conditional key syntax instead: `(status: "ACTIVE") if payload.isActive`.\n\n`);
-    markdown.appendCodeblock(`if (payload.status == "ACTIVE") "Approved" else "Pending"`, 'dataweave');
+    markdown.appendMarkdown('### 🔀 DataWeave Conditional: `if ... else`\n\n');
+    markdown.appendMarkdown('**📖 Logic:** Conditional ternary expression. Evaluates boolean condition and executes either the `if` branch or `else` branch.\n\n');
+    markdown.appendMarkdown('💡 **Plain-English:** "If condition is met, return Option A, otherwise return Option B."\n\n');
+    markdown.appendMarkdown('🎯 **Why We Use It:** Dynamic field values, conditional formatting, and branching data structures.\n\n');
+    markdown.appendMarkdown('⚡ **Quality Tip:** In DataWeave, `if` is an expression that must always have a matching `else` branch so that a value is always produced. If you want to omit fields when a condition is false, use conditional key syntax instead: `(status: "ACTIVE") if payload.isActive`.\n\n');
+    markdown.appendCodeblock('if (payload.status == "ACTIVE") "Approved" else "Pending"', 'dataweave');
     return new vscode.Hover(markdown, wordRange);
   }
 
   if (word === 'as') {
     const markdown = new vscode.MarkdownString();
     markdown.isTrusted = true;
-    markdown.appendMarkdown(`### 🔄 DataWeave Type Coercion: \`as\`\n\n`);
-    markdown.appendMarkdown(`**📖 Logic:** Explicitly casts/coerces a value from one data type to another (e.g. String to Number, DateTime formatting).\n\n`);
-    markdown.appendMarkdown(`💡 **Plain-English:** "Convert this data into this specific data type."\n\n`);
-    markdown.appendMarkdown(`🎯 **Why We Use It:** Ensuring strictly typed interfaces and formatting dates/numbers according to external system specs.\n\n`);
-    markdown.appendMarkdown(`⚡ **Performance & Quality:**\n• Always guard against unparseable values with `default`: `(payload.amount as Number default 0)`.\n• For dates: `now() as String {format: "yyyy-MM-dd"}`.\n\n`);
-    markdown.appendCodeblock(`payload.age as Number default 0\nnow() as String {format: "yyyy-MM-dd"}`, 'dataweave');
+    markdown.appendMarkdown('### 🔄 DataWeave Type Coercion: `as`\n\n');
+    markdown.appendMarkdown('**📖 Logic:** Explicitly casts/coerces a value from one data type to another (e.g. String to Number, DateTime formatting).\n\n');
+    markdown.appendMarkdown('💡 **Plain-English:** "Convert this data into this specific data type."\n\n');
+    markdown.appendMarkdown('🎯 **Why We Use It:** Ensuring strictly typed interfaces and formatting dates/numbers according to external system specs.\n\n');
+    markdown.appendMarkdown('⚡ **Performance & Quality:**\n• Always guard against unparseable values with `default`: `(payload.amount as Number default 0)`.\n• For dates: `now() as String {format: "yyyy-MM-dd"}`.\n\n');
+    markdown.appendCodeblock('payload.age as Number default 0\nnow() as String {format: "yyyy-MM-dd"}', 'dataweave');
     return new vscode.Hover(markdown, wordRange);
   }
 
