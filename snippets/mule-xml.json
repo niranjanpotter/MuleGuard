@@ -1,0 +1,242 @@
+{
+  "Mule Flow": {
+    "prefix": "mg-flow",
+    "body": [
+      "<flow name=\"${1:myFlow}\">",
+      "\t<http:listener doc:name=\"Listener\" config-ref=\"${2:HTTP_Listener_config}\" path=\"${3:/api}\" allowedMethods=\"GET\"/>",
+      "\t<logger level=\"INFO\" doc:name=\"Logger\" message=\"#[payload]\"/>",
+      "\t<set-payload value=\"${4:#[output application/json --- { message: 'Hello' }]}\" doc:name=\"Set Payload\" mimeType=\"application/json\"/>",
+      "\t<error-handler>",
+      "\t\t<on-error-propagate enableNotifications=\"true\" logException=\"true\">",
+      "\t\t\t<logger level=\"ERROR\" doc:name=\"Error Logger\" message=\"#[error.description]\"/>",
+      "\t\t</on-error-propagate>",
+      "\t</error-handler>",
+      "</flow>$0"
+    ],
+    "description": "Complete Mule 4 flow with HTTP listener, logger, set-payload, and error handler"
+  },
+  "Mule Sub-Flow": {
+    "prefix": "mg-sub-flow",
+    "body": [
+      "<sub-flow name=\"${1:mySubFlow}\">",
+      "\t<logger level=\"INFO\" doc:name=\"Logger\" message=\"${2:#[payload]}\"/>",
+      "</sub-flow>$0"
+    ],
+    "description": "Mule 4 sub-flow with a logger"
+  },
+  "HTTP Listener": {
+    "prefix": "mg-http-listener",
+    "body": [
+      "<http:listener doc:name=\"${1:Listener}\" config-ref=\"${2:HTTP_Listener_config}\" path=\"${3:/api/resource}\" allowedMethods=\"${4|GET,POST,PUT,DELETE,PATCH|}\" />"
+    ],
+    "description": "HTTP listener with config-ref, path, and allowedMethods"
+  },
+  "HTTP Request": {
+    "prefix": "mg-http-request",
+    "body": [
+      "<http:request doc:name=\"${1:Request}\" config-ref=\"${2:HTTP_Request_config}\" method=\"${3|GET,POST,PUT,DELETE,PATCH|}\" path=\"${4:/api/resource}\" />"
+    ],
+    "description": "HTTP request with config-ref, method, and path"
+  },
+  "HTTP Listener Config": {
+    "prefix": "mg-http-listener-config",
+    "body": [
+      "<http:listener-config name=\"${1:HTTP_Listener_config}\" doc:name=\"HTTP Listener config\">",
+      "\t<http:listener-connection host=\"${2:0.0.0.0}\" port=\"${3:8081}\" />",
+      "</http:listener-config>$0"
+    ],
+    "description": "Full HTTP listener configuration with connection host and port"
+  },
+  "HTTP Request Config": {
+    "prefix": "mg-http-request-config",
+    "body": [
+      "<http:request-config name=\"${1:HTTP_Request_config}\" doc:name=\"HTTP Request config\">",
+      "\t<http:request-connection host=\"${2:localhost}\" port=\"${3:8080}\" protocol=\"${4|HTTP,HTTPS|}\" />",
+      "</http:request-config>$0"
+    ],
+    "description": "Full HTTP request configuration with connection host, port, and protocol"
+  },
+  "Database Select": {
+    "prefix": "mg-db-select",
+    "body": [
+      "<db:select doc:name=\"Select\" config-ref=\"${1:Database_Config}\">",
+      "\t<db:sql><![CDATA[${2:SELECT * FROM customers WHERE id = :id}]]></db:sql>",
+      "\t<db:input-parameters>",
+      "\t\t<![CDATA[#[{ 'id': ${3:attributes.queryParams.id} }]]]>",
+      "\t</db:input-parameters>",
+      "</db:select>$0"
+    ],
+    "description": "Database select operation with parameterized SQL query"
+  },
+  "Database Insert": {
+    "prefix": "mg-db-insert",
+    "body": [
+      "<db:insert doc:name=\"Insert\" config-ref=\"${1:Database_Config}\">",
+      "\t<db:sql><![CDATA[${2:INSERT INTO customers (name, email) VALUES (:name, :email)}]]></db:sql>",
+      "\t<db:input-parameters>",
+      "\t\t<![CDATA[#[{ 'name': ${3:payload.name}, 'email': ${4:payload.email} }]]]>",
+      "\t</db:input-parameters>",
+      "</db:insert>$0"
+    ],
+    "description": "Database insert operation with parameterized SQL"
+  },
+  "Database Config": {
+    "prefix": "mg-db-config",
+    "body": [
+      "<db:config name=\"${1:Database_Config}\" doc:name=\"Database Config\">",
+      "\t<db:my-sql-connection host=\"${2:localhost}\" port=\"${3:3306}\" database=\"${4:mydb}\" user=\"${5:root}\" password=\"${6:password}\" />",
+      "</db:config>$0"
+    ],
+    "description": "Database configuration with MySQL connection"
+  },
+  "DataWeave Transform": {
+    "prefix": "mg-transform",
+    "body": [
+      "<ee:transform doc:name=\"${1:Transform Message}\">",
+      "\t<ee:message>",
+      "\t\t<ee:set-payload><![CDATA[%dw 2.0",
+      "output ${2:application/json}",
+      "---",
+      "${3:{",
+      "\tid: payload.id,",
+      "\tname: payload.name",
+      "}}]]></ee:set-payload>",
+      "\t</ee:message>",
+      "</ee:transform>$0"
+    ],
+    "description": "DataWeave transform with set-payload CDATA block"
+  },
+  "Set Variable": {
+    "prefix": "mg-set-variable",
+    "body": [
+      "<set-variable variableName=\"${1:myVar}\" value=\"${2:#[payload]}\" doc:name=\"Set Variable\" />"
+    ],
+    "description": "Set a flow variable with name and value"
+  },
+  "Set Payload": {
+    "prefix": "mg-set-payload",
+    "body": [
+      "<set-payload value=\"${1:#[output application/json --- payload]}\" doc:name=\"Set Payload\" mimeType=\"${2:application/json}\" />"
+    ],
+    "description": "Set payload with value and MIME type"
+  },
+  "Logger": {
+    "prefix": "mg-logger",
+    "body": [
+      "<logger level=\"${1|INFO,DEBUG,WARN,ERROR|}\" doc:name=\"Logger\" message=\"${2:#[payload]}\" />"
+    ],
+    "description": "Logger component with level and message"
+  },
+  "Choice Router": {
+    "prefix": "mg-choice",
+    "body": [
+      "<choice doc:name=\"Choice\">",
+      "\t<when expression=\"${1:#[payload.status == 'active']}\">",
+      "\t\t<logger level=\"INFO\" doc:name=\"Logger\" message=\"${2:Condition met}\" />",
+      "\t</when>",
+      "\t<otherwise>",
+      "\t\t<logger level=\"INFO\" doc:name=\"Otherwise Logger\" message=\"${3:Default path}\" />",
+      "\t</otherwise>",
+      "</choice>$0"
+    ],
+    "description": "Choice router with when condition and otherwise default"
+  },
+  "For Each": {
+    "prefix": "mg-foreach",
+    "body": [
+      "<foreach doc:name=\"For Each\" collection=\"${1:#[payload]}\">",
+      "\t<logger level=\"INFO\" doc:name=\"Logger\" message=\"#[payload]\" />",
+      "</foreach>$0"
+    ],
+    "description": "For-each scope iterating over a collection"
+  },
+  "Scatter-Gather": {
+    "prefix": "mg-scatter-gather",
+    "body": [
+      "<scatter-gather doc:name=\"Scatter-Gather\">",
+      "\t<route>",
+      "\t\t<logger level=\"INFO\" doc:name=\"Route 1\" message=\"${1:Processing route 1}\" />",
+      "\t</route>",
+      "\t<route>",
+      "\t\t<logger level=\"INFO\" doc:name=\"Route 2\" message=\"${2:Processing route 2}\" />",
+      "\t</route>",
+      "</scatter-gather>$0"
+    ],
+    "description": "Scatter-gather with two parallel routes"
+  },
+  "Error Handler": {
+    "prefix": "mg-error-handler",
+    "body": [
+      "<error-handler>",
+      "\t<on-error-propagate type=\"${1:ANY}\" enableNotifications=\"true\" logException=\"true\">",
+      "\t\t<logger level=\"ERROR\" doc:name=\"Error Logger\" message=\"#[error.description]\" />",
+      "\t</on-error-propagate>",
+      "</error-handler>$0"
+    ],
+    "description": "Error handler with on-error-propagate and logger"
+  },
+  "Try Scope": {
+    "prefix": "mg-try",
+    "body": [
+      "<try doc:name=\"Try\">",
+      "\t${1:<!-- processors -->}",
+      "\t<error-handler>",
+      "\t\t<on-error-propagate type=\"${2:ANY}\" enableNotifications=\"true\" logException=\"true\">",
+      "\t\t\t<logger level=\"ERROR\" doc:name=\"Error Logger\" message=\"#[error.description]\" />",
+      "\t\t</on-error-propagate>",
+      "\t</error-handler>",
+      "</try>$0"
+    ],
+    "description": "Try scope with error handler for localized error handling"
+  },
+  "TLS Context": {
+    "prefix": "mg-tls",
+    "body": [
+      "<tls:context name=\"${1:TLS_Context}\">",
+      "\t<tls:key-store type=\"${2|jks,pkcs12|}\" path=\"${3:keystore.jks}\" keyPassword=\"${4:changeit}\" password=\"${5:changeit}\" />",
+      "\t<tls:trust-store type=\"${6|jks,pkcs12|}\" path=\"${7:truststore.jks}\" password=\"${8:changeit}\" />",
+      "</tls:context>$0"
+    ],
+    "description": "TLS context with key-store and trust-store configuration"
+  },
+  "MUnit Test Suite": {
+    "prefix": "mg-munit-test",
+    "body": [
+      "<munit:config name=\"${1:test-suite}\" doc:name=\"MUnit configuration\" />",
+      "",
+      "<munit:test name=\"${2:test-case-name}\" doc:name=\"${3:Test case description}\">",
+      "\t<munit:behavior>",
+      "\t\t<munit-tools:mock-when processor=\"${4:http:request}\" doc:name=\"Mock\">",
+      "\t\t\t<munit-tools:with-attributes>",
+      "\t\t\t\t<munit-tools:with-attribute attributeName=\"doc:name\" whereValue=\"${5:Request}\" />",
+      "\t\t\t</munit-tools:with-attributes>",
+      "\t\t\t<munit-tools:then-return>",
+      "\t\t\t\t<munit-tools:payload value=\"#['${6:mock response}']\" />",
+      "\t\t\t</munit-tools:then-return>",
+      "\t\t</munit-tools:mock-when>",
+      "\t</munit:behavior>",
+      "\t<munit:execution>",
+      "\t\t<flow-ref name=\"${7:myFlow}\" doc:name=\"Flow-ref\" />",
+      "\t</munit:execution>",
+      "\t<munit:validation>",
+      "\t\t<munit-tools:assert-that expression=\"#[payload]\" is=\"#[MunitTools::notNullValue()]\" doc:name=\"Assert payload\" />",
+      "\t</munit:validation>",
+      "</munit:test>$0"
+    ],
+    "description": "MUnit test suite with config and a full test case (behavior, execution, validation)"
+  },
+  "APIkit Router": {
+    "prefix": "mg-apikit-router",
+    "body": [
+      "<apikit:router config-ref=\"${1:api-config}\" doc:name=\"APIkit Router\" />"
+    ],
+    "description": "APIkit router with configuration reference"
+  },
+  "Flow Reference": {
+    "prefix": "mg-flow-ref",
+    "body": [
+      "<flow-ref name=\"${1:targetFlowName}\" doc:name=\"Flow Reference\" />"
+    ],
+    "description": "Flow reference to call another flow or sub-flow by name"
+  }
+}

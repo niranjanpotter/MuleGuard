@@ -1,6 +1,10 @@
 .vscode/**
 src/**
 sample/**
+test/**
+out/testRunner.js
+out/testRunner.js.map
+MuleGuard/**
 tsconfig.json
 .gitignore
 **/*.map

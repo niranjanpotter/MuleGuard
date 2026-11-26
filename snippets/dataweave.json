@@ -1,0 +1,66 @@
+{
+  "DataWeave Header": {
+    "prefix": "mg-dw-header",
+    "body": [
+      "%dw 2.0",
+      "output application/${1:json}",
+      "---",
+      "${0}"
+    ],
+    "description": "DataWeave 2.0 header with output format and separator"
+  },
+  "DataWeave Map": {
+    "prefix": "mg-dw-map",
+    "body": [
+      "${1:payload} map (${2:item}, ${3:index}) -> {",
+      "\t${4:key}: ${2}.${5:field}",
+      "}"
+    ],
+    "description": "Map transformation over an array"
+  },
+  "DataWeave Filter": {
+    "prefix": "mg-dw-filter",
+    "body": [
+      "${1:payload} filter (${2:item}, ${3:index}) -> ${2}.${4:field} ${5:== }${6:value}"
+    ],
+    "description": "Filter array elements with a condition"
+  },
+  "DataWeave Reduce": {
+    "prefix": "mg-dw-reduce",
+    "body": [
+      "${1:payload} reduce (${2:item}, ${3:accumulator} = ${4:0}) -> ${3} ${5:+} ${2}.${6:field}"
+    ],
+    "description": "Reduce array to a single value with an accumulator"
+  },
+  "DataWeave FlatMap": {
+    "prefix": "mg-dw-flatten",
+    "body": [
+      "${1:payload} flatMap (${2:item}, ${3:index}) -> ${2}.${4:nestedArray}"
+    ],
+    "description": "flatMap pattern to flatten nested arrays"
+  },
+  "DataWeave GroupBy": {
+    "prefix": "mg-dw-groupby",
+    "body": [
+      "${1:payload} groupBy (${2:item}) -> ${2}.${3:field}"
+    ],
+    "description": "Group array elements by a field value"
+  },
+  "DataWeave Conditional": {
+    "prefix": "mg-dw-conditional",
+    "body": [
+      "if (${1:payload.field} != null)",
+      "\t${2:payload.field}",
+      "else",
+      "\t${3:\"default\"}"
+    ],
+    "description": "Conditional expression with null check"
+  },
+  "DataWeave Default": {
+    "prefix": "mg-dw-default",
+    "body": [
+      "${1:payload.field} default ${2:\"fallback\"}"
+    ],
+    "description": "Expression with a default fallback value"
+  }
+}

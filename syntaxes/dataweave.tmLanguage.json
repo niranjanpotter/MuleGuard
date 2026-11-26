@@ -1,0 +1,153 @@
+{
+  "name": "DataWeave",
+  "scopeName": "source.dataweave",
+  "fileTypes": ["dwl"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#separator" },
+    { "include": "#header-directives" },
+    { "include": "#output-formats" },
+    { "include": "#strings" },
+    { "include": "#regex" },
+    { "include": "#numbers" },
+    { "include": "#constants" },
+    { "include": "#language-variables" },
+    { "include": "#types" },
+    { "include": "#builtin-functions" },
+    { "include": "#keywords" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.dataweave",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.dataweave",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "separator": {
+      "patterns": [
+        {
+          "name": "meta.separator.dataweave",
+          "match": "^---$"
+        }
+      ]
+    },
+    "header-directives": {
+      "patterns": [
+        {
+          "name": "keyword.control.directive.dataweave",
+          "match": "%(dw|input|output|var|fun|type|namespace)\\b"
+        }
+      ]
+    },
+    "output-formats": {
+      "patterns": [
+        {
+          "name": "support.type.media.dataweave",
+          "match": "\\b(application|text)/(json|xml|csv|java|flatfile|yaml|xlsx|dw|plain|html)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.dataweave",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.dataweave",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.dataweave",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.dataweave",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "regex": {
+      "patterns": [
+        {
+          "name": "string.regexp.dataweave",
+          "match": "/(?![/*])(?:[^/\\\\]|\\\\.)+/"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.decimal.dataweave",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.dataweave",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.dataweave",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    },
+    "language-variables": {
+      "patterns": [
+        {
+          "name": "variable.language.dataweave",
+          "match": "\\b(payload|vars|attributes|flow|error)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.dataweave",
+          "match": "\\b(String|Number|Boolean|Date|DateTime|Array|Object|Null|Any|Binary)\\b"
+        }
+      ]
+    },
+    "builtin-functions": {
+      "patterns": [
+        {
+          "name": "support.function.dataweave",
+          "match": "\\b(map|filter|reduce|flatMap|groupBy|orderBy|distinctBy|pluck|mapObject|filterObject|sizeOf|isEmpty|upper|lower|trim|contains|startsWith|endsWith|replace|splitBy|joinBy|log|now|uuid|typeOf|write|read)(?=\\s*\\(|\\s+[a-zA-Z$])"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.dataweave",
+          "match": "\\b(if|else|do|using|as|is|match|case|unless|otherwise|not|and|or|import|from|var|fun|type|ns|default|update)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.dataweave",
+          "match": "(\\+\\+|--|==|!=|~=|>=|<=|->|[><])"
+        }
+      ]
+    }
+  }
+}

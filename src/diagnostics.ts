@@ -1,11 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { analyzeBestPractices } from './bestPracticeRules';
 import { analyzeCostIssues } from './costAnalyzer';
 import {
   analyzeDataWeaveDocument,
   analyzeDataWeaveInXml,
 } from './dataweaveChecker';
+import { filterSuppressedDiagnostics } from './suppressions';
 
 export const MULEGUARD_SOURCE = 'MuleGuard';
 
@@ -325,10 +327,12 @@ function hasMUnitCoverageForFlow(
  */
 export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnostic[] {
   if (isScannableDwlDocument(document)) {
-    return analyzeDataWeaveDocument(document);
+    const rawDiagnostics = analyzeDataWeaveDocument(document);
+    return filterSuppressedDiagnostics(rawDiagnostics, document.getText(), true);
   }
 
-  const maskedText = maskXmlComments(document.getText());
+  const rawText = document.getText();
+  const maskedText = maskXmlComments(rawText);
   const diagnostics: vscode.Diagnostic[] = [];
 
   // Rule 1 applies to all XML files, including MUnit configs.
@@ -336,7 +340,7 @@ export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnosti
 
   // Rules 2-8 apply to Mule application XML, not MUnit test suites themselves.
   if (isMUnitDocument(document, maskedText)) {
-    return diagnostics;
+    return filterSuppressedDiagnostics(diagnostics, rawText, false);
   }
 
   const flows = extractFlows(maskedText);
@@ -418,7 +422,10 @@ export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnosti
   diagnostics.push(...analyzeDataWeaveInXml(document, maskedText));
   diagnostics.push(...analyzeCostIssues(document, maskedText));
 
-  return diagnostics;
+  // Expanded Best Practice (BP) and Security (S) rules
+  diagnostics.push(...analyzeBestPractices(document, maskedText, flows));
+
+  return filterSuppressedDiagnostics(diagnostics, rawText, false);
 }
 
 /**

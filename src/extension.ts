@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { executeCodeReviewWorkflow } from './codeReviewEngine';
 import {
   isEnabled,
   isScannableDocument,
@@ -7,6 +8,10 @@ import {
   scanWorkspace,
 } from './diagnostics';
 import { MuleGuardFixProvider, fixAllInDocument } from './fixProvider';
+import { FlowExplorerProvider } from './flowExplorer';
+import { FlowVisualizerPanel } from './flowVisualizer';
+import { MuleGuardHoverProvider, MULE_XML_SELECTOR } from './hoverProvider';
+import { calculateComplexityMetrics, compareEnvConfigs, runSecretScanner } from './tooling';
 
 const CHANGE_DEBOUNCE_MS = 250;
 const WORKSPACE_EXCLUDE_GLOB =
@@ -270,6 +275,63 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  const hoverDisposable = vscode.languages.registerHoverProvider(
+    MULE_XML_SELECTOR,
+    new MuleGuardHoverProvider()
+  );
+
+  // Register Flow Explorer Tree View
+  const flowExplorerProvider = new FlowExplorerProvider();
+  const treeViewDisposable = vscode.window.registerTreeDataProvider(
+    'muleguardFlowExplorer',
+    flowExplorerProvider
+  );
+  const refreshExplorerDisposable = vscode.commands.registerCommand(
+    'muleguard.refreshFlowExplorer',
+    () => flowExplorerProvider.refresh()
+  );
+
+  // Feature 2: 7-Step Code Review Command
+  const codeReviewDisposable = vscode.commands.registerCommand(
+    'muleguard.runCodeReview',
+    async () => {
+      await executeCodeReviewWorkflow();
+    }
+  );
+
+  // Feature 27: Flow Visualizer
+  const visualizeFlowDisposable = vscode.commands.registerCommand(
+    'muleguard.visualizeFlow',
+    () => {
+      const activeDoc = vscode.window.activeTextEditor?.document;
+      FlowVisualizerPanel.createOrShow(context.extensionUri, activeDoc);
+    }
+  );
+
+  // Feature 11: Env Config Diff
+  const envDiffDisposable = vscode.commands.registerCommand(
+    'muleguard.diffEnvConfigs',
+    async () => {
+      await compareEnvConfigs();
+    }
+  );
+
+  // Feature 12: Secret Scanner
+  const secretScannerDisposable = vscode.commands.registerCommand(
+    'muleguard.scanSecrets',
+    async () => {
+      await runSecretScanner();
+    }
+  );
+
+  // Feature 15: Flow Complexity Metrics
+  const complexityMetricsDisposable = vscode.commands.registerCommand(
+    'muleguard.showComplexityMetrics',
+    async () => {
+      await calculateComplexityMetrics();
+    }
+  );
+
   const timerCleanupDisposable = new vscode.Disposable(() => {
     clearAllTimers();
   });
@@ -294,6 +356,14 @@ export function activate(context: vscode.ExtensionContext): void {
     onDeleteDisposable,
     onConfigDisposable,
     codeActionsDisposable,
+    hoverDisposable,
+    treeViewDisposable,
+    refreshExplorerDisposable,
+    codeReviewDisposable,
+    visualizeFlowDisposable,
+    envDiffDisposable,
+    secretScannerDisposable,
+    complexityMetricsDisposable,
     scanCommandDisposable,
     fixAllCommandDisposable,
     timerCleanupDisposable

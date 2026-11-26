@@ -1,8 +1,8 @@
 {
   "name": "muleguard",
-  "displayName": "MuleGuard Pro",
-  "description": "Guardrails for MuleSoft - Secure, Compliant Mule APIs",
-  "version": "0.2.0",
+  "displayName": "MuleGuard -- MuleSoft Code Review",
+  "description": "Real-time linting, security scanning, connector tooltips, and structured code review for MuleSoft Mule 4 applications.",
+  "version": "1.0.0",
   "publisher": "niranjanpotter",
   "license": "MIT",
   "icon": "icon.png",
@@ -40,19 +40,146 @@
   "activationEvents": [
     "onStartupFinished",
     "onLanguage:xml",
+    "onLanguage:dataweave",
     "workspaceContains:**/*.xml",
     "workspaceContains:**/*.dwl"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "dataweave",
+        "aliases": [
+          "DataWeave",
+          "dataweave",
+          "dwl"
+        ],
+        "extensions": [
+          ".dwl"
+        ],
+        "configuration": "./syntaxes/language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dataweave",
+        "scopeName": "source.dataweave",
+        "path": "./syntaxes/dataweave.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "xml",
+        "path": "./snippets/mule-xml.json"
+      },
+      {
+        "language": "dataweave",
+        "path": "./snippets/dataweave.json"
+      }
+    ],
     "commands": [
       {
         "command": "muleguard.scanWorkspace",
-        "title": "MuleGuard Pro: Scan Workspace"
+        "title": "MuleGuard: Scan Workspace",
+        "category": "MuleGuard"
       },
       {
         "command": "muleguard.fixAll",
-        "title": "MuleGuard Pro: Fix All Auto-Fixable Issues"
+        "title": "MuleGuard: Fix All Auto-Fixable Issues",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.runCodeReview",
+        "title": "MuleGuard: Run 7-Step Code Review Audit",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.visualizeFlow",
+        "title": "MuleGuard: Visualize Mule Flow",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.diffEnvConfigs",
+        "title": "MuleGuard: Compare Environment Configs (YAML Diff)",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.scanSecrets",
+        "title": "MuleGuard: Scan Workspace for Hardcoded Secrets",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.showComplexityMetrics",
+        "title": "MuleGuard: Calculate Flow Complexity Metrics",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.refreshFlowExplorer",
+        "title": "MuleGuard: Refresh Flow Explorer",
+        "category": "MuleGuard",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "muleguard-sidebar",
+          "title": "MuleGuard",
+          "icon": "icon.png"
+        }
+      ]
+    },
+    "views": {
+      "muleguard-sidebar": [
+        {
+          "id": "muleguardFlowExplorer",
+          "name": "Mule Project Explorer"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "muleguard.runCodeReview",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m"
+      },
+      {
+        "command": "muleguard.scanWorkspace",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
+      },
+      {
+        "command": "muleguard.visualizeFlow",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorLangId == xml"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "muleguard.welcome",
+        "title": "Welcome to MuleGuard",
+        "description": "Start building secure, high-performance MuleSoft APIs with real-time linting, connector hovers, and full code review.",
+        "steps": [
+          {
+            "id": "muleguard.step1",
+            "title": "Real-time Linting & Quality Guardrails",
+            "description": "Open any Mule XML or DataWeave file. MuleGuard immediately displays inline squiggles for hardcoded credentials, missing error handlers, log levels, and performance antipatterns.",
+            "media": { "markdown": "README.md" }
+          },
+          {
+            "id": "muleguard.step2",
+            "title": "Connector Intelligence & Hover Tooltips",
+            "description": "Hover over any Mule connector (<http:request>, <db:select>, <ee:transform>) to see human-readable explanations, runtime execution models, and Anypoint doc links.",
+            "media": { "markdown": "README.md" }
+          },
+          {
+            "id": "muleguard.step3",
+            "title": "Run 7-Step Code Review",
+            "description": "Press `Ctrl+Shift+M` or open Command Palette and run `MuleGuard: Run 7-Step Code Review Audit` to generate an enterprise `code-review-report.md` covering all 45 checklist rules.",
+            "media": { "markdown": "README.md" }
+          }
+        ]
       }
     ],
     "configuration": {
@@ -62,6 +189,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable or disable MuleGuard Pro static analysis diagnostics for Mule XML and DataWeave (.dwl) files."
+        },
+        "muleguard.hover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable connector hover tooltips with human-readable logic and Anypoint documentation links."
         }
       }
     }
