@@ -133,5 +133,36 @@ function walkFiles(dir, out = []) {
   const svg = renderScoreBadgeSvg(85);
   assert(svg.includes('85/100') && svg.includes('#4c1'), 'Expected green badge SVG for 85/100');
 
-  console.log('✅ Enterprise APIkit regression suite PASSED!');
+  // Verify config, secretProviders, fixture/env classification, flow docs, score badge, and activity icon
+  const os = require('os');
+  const { getResolvedConfig, isSafeSecretExpression } = require('../out/config');
+  const { isFixtureDwlFile } = require('../out/dataweaveChecker');
+  const { detectEnvInPath } = require('../out/flowExplorer');
+  const { generateFlowDocsForWorkspace } = require('../out/flowDocGenerator');
+  const { generateBadgeForWorkspace } = require('../out/badgeGenerator');
+
+  const cfg = getResolvedConfig(vscodeMock.Uri.file(path.join(fixtureRoot, 'src', 'main', 'mule', 'api.xml')));
+  assert.strictEqual(isSafeSecretExpression("#[p('aws-secrets::db.pass')]", cfg.secretProviders), true, 'aws-secrets provider');
+  assert.strictEqual(isFixtureDwlFile('src/test/resources/sample.dwl', '{ "id": 1 }'), true, 'fixture classification');
+  assert.strictEqual(detectEnvInPath('src/main/resources/dwl/uat/map.dwl', cfg.environments), 'uat', 'env path detection');
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mg-docs-'));
+  fs.cpSync(fixtureRoot, tmpRoot, { recursive: true });
+  const docs = await generateFlowDocsForWorkspace(tmpRoot);
+  assert(fs.existsSync(path.join(tmpRoot, 'docs', 'flows.md')), 'docs/flows.md generated');
+  const flowsMd = fs.readFileSync(path.join(tmpRoot, 'docs', 'flows.md'), 'utf8');
+  assert(flowsMd.includes('APIkit Routing Table'), 'APIkit routing table present in docs/flows.md');
+  assert(docs.flowCount >= 3 && docs.routeCount === 2, 'Expected >=3 flows and 2 APIkit routes');
+
+  const badge = await generateBadgeForWorkspace(tmpRoot);
+  assert(fs.existsSync(badge.badgePath), 'muleguard-score.svg generated');
+  assert(badge.score >= 0 && badge.score <= 100, 'Expected valid badge score');
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+  assert.strictEqual(pkg.contributes.viewsContainers.activitybar[0].icon, 'resources/activity-icon.svg');
+  assert(fs.existsSync(path.resolve(__dirname, '..', 'resources', 'activity-icon.svg')), 'activity-icon.svg exists');
+  assert(fs.existsSync(path.resolve(__dirname, '..', 'docs', 'RULES.md')), 'docs/RULES.md exists');
+
+  console.log('✅ Enterprise APIkit + v1.1.0 feature regression suite PASSED!');
 })();
