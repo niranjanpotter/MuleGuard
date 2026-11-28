@@ -1,19 +1,37 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { filterBaselinedDiagnostics } from './baseline';
 import { analyzeBestPractices } from './bestPracticeRules';
+import {
+  applyRuleOverrides,
+  buildWorkspaceExcludeGlob,
+  getResolvedConfig,
+  isExcludedFilePath,
+  isSafeSecretExpression,
+  matchesAnyGlob,
+} from './config';
 import { analyzeCostIssues } from './costAnalyzer';
 import {
   analyzeDataWeaveDocument,
   analyzeDataWeaveInXml,
 } from './dataweaveChecker';
 import { filterSuppressedDiagnostics } from './suppressions';
+import {
+  buildIndex,
+  FlowInfo,
+  getCachedIndex,
+  isFlowCoveredByMUnit,
+  isFlowErrorHandled,
+  WorkspaceIndex,
+} from './workspaceIndex';
 
 export const MULEGUARD_SOURCE = 'MuleGuard';
 
 export enum RuleCode {
   HardcodedSecret = 'MG001',
   MissingErrorHandler = 'MG002',
+  UnresolvedErrorHandler = 'MG002b',
   MissingLogger = 'MG003',
   MissingValidation = 'MG004',
   MissingMUnit = 'MG005',
@@ -36,8 +54,10 @@ interface MUnitTestFile {
   content: string;
 }
 
-const IGNORED_PATH_SEGMENTS = /(?:^|[/\\])(node_modules|target|out|dist|\.git)(?:[/\\]|$)/i;
-const WORKSPACE_EXCLUDE_GLOB = '{**/node_modules/**,**/target/**,**/out/**,**/dist/**,**/.git/**}';
+const IGNORED_PATH_SEGMENTS =
+  /(?:^|[/\\])(node_modules|target|out|dist|\.git|\.mule|\.tooling-project)(?:[/\\]|$)/i;
+const WORKSPACE_EXCLUDE_GLOB =
+  '{**/src/test/**,**/node_modules/**,**/target/**,**/out/**,**/dist/**,**/.git/**,**/.mule/**,**/.tooling-project/**}';
 
 const SECRET_ATTRIBUTE_REGEX =
   /\b(password|clientSecret|clientId|client_secret|client_id|client-secret|client-id)\s*=\s*(["'])([^"']*)\2/gi;
@@ -72,7 +92,8 @@ export function isScannableXmlDocument(document: vscode.TextDocument): boolean {
     return false;
   }
 
-  return !IGNORED_PATH_SEGMENTS.test(document.fileName);
+  const cfg = getResolvedConfig(document.uri);
+  return !IGNORED_PATH_SEGMENTS.test(document.fileName) && !isExcludedFilePath(document.fileName, cfg.exclude);
 }
 
 /**
@@ -87,7 +108,8 @@ export function isScannableDwlDocument(document: vscode.TextDocument): boolean {
     return false;
   }
 
-  return !IGNORED_PATH_SEGMENTS.test(document.fileName);
+  const cfg = getResolvedConfig(document.uri);
+  return !IGNORED_PATH_SEGMENTS.test(document.fileName) && !isExcludedFilePath(document.fileName, cfg.exclude);
 }
 
 /**
@@ -154,7 +176,7 @@ export function extractFlows(maskedText: string): MuleFlow[] {
     }
 
     const openTagText = maskedText.slice(openTagStart, openTagEnd + 1);
-    const nameMatch = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(openTagText);
+    const nameMatch = /(?<![\w:-])name\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(openTagText);
     const flowName = (nameMatch?.[1] ?? nameMatch?.[2] ?? '').trim();
 
     const bodyStart = openTagEnd + 1;
@@ -194,13 +216,15 @@ function createDiagnostic(
   return diagnostic;
 }
 
-function isDynamicExpression(value: string): boolean {
+function isDynamicExpression(value: string, secretProviders: string[] = []): boolean {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     return true;
   }
   return (
-    PROPERTY_PLACEHOLDER_REGEX.test(trimmed) || DATAWEAVE_EXPRESSION_REGEX.test(trimmed)
+    PROPERTY_PLACEHOLDER_REGEX.test(trimmed) ||
+    DATAWEAVE_EXPRESSION_REGEX.test(trimmed) ||
+    isSafeSecretExpression(trimmed, secretProviders)
   );
 }
 
@@ -209,7 +233,8 @@ function isDynamicExpression(value: string): boolean {
  */
 function checkHardcodedSecrets(
   document: vscode.TextDocument,
-  maskedText: string
+  maskedText: string,
+  secretProviders: string[] = []
 ): vscode.Diagnostic[] {
   const diagnostics: vscode.Diagnostic[] = [];
   SECRET_ATTRIBUTE_REGEX.lastIndex = 0;
@@ -217,7 +242,7 @@ function checkHardcodedSecrets(
   let match: RegExpExecArray | null;
   while ((match = SECRET_ATTRIBUTE_REGEX.exec(maskedText)) !== null) {
     const rawValue = match[3] ?? '';
-    if (isDynamicExpression(rawValue)) {
+    if (isDynamicExpression(rawValue, secretProviders)) {
       continue;
     }
 
@@ -322,13 +347,49 @@ function hasMUnitCoverageForFlow(
   });
 }
 
+function isSingleFlowRefApikitRoute(flowName: string, flowBody: string): boolean {
+  if (!/^(get|post|put|patch|delete|head|options):\\/i.test(flowName)) {
+    return false;
+  }
+  const tags = flowBody.match(/<[a-zA-Z][\w:-]*/g) ?? [];
+  return tags.length > 0 && tags.every((t) => /^<flow-ref$/i.test(t));
+}
+
+function hasAcceptedLogging(
+  flowBody: string,
+  acceptedFlows: string[]
+): boolean {
+  if (LOGGER_REGEX.test(flowBody)) {
+    return true;
+  }
+  const flowRefRegex = /<flow-ref\s+[^>]*?(?<![\w:-])name\s*=\s*["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = flowRefRegex.exec(flowBody)) !== null) {
+    const target = m[1].trim();
+    if (matchesAnyGlob(target, acceptedFlows)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Analyzes a single TextDocument (.xml or .dwl) and returns all MuleGuard diagnostics.
  */
-export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnostic[] {
+export function analyzeDocument(
+  document: vscode.TextDocument,
+  providedIndex?: WorkspaceIndex
+): vscode.Diagnostic[] {
+  const cfg = getResolvedConfig(document.uri);
+  const index = providedIndex ?? getCachedIndex() ?? undefined;
+
   if (isScannableDwlDocument(document)) {
-    const rawDiagnostics = analyzeDataWeaveDocument(document);
-    return filterSuppressedDiagnostics(rawDiagnostics, document.getText(), true);
+    const isApikitWorkspace = index
+      ? Array.from(index.flows.values()).some((f) => f.isApikitMain || f.isApikitRoute)
+      : false;
+    const rawDiagnostics = analyzeDataWeaveDocument(document, isApikitWorkspace);
+    const unsuppressed = filterSuppressedDiagnostics(rawDiagnostics, document.getText(), true);
+    return filterBaselinedDiagnostics(document, applyRuleOverrides(unsuppressed, cfg));
   }
 
   const rawText = document.getText();
@@ -336,41 +397,94 @@ export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnosti
   const diagnostics: vscode.Diagnostic[] = [];
 
   // Rule 1 applies to all XML files, including MUnit configs.
-  diagnostics.push(...checkHardcodedSecrets(document, maskedText));
+  diagnostics.push(...checkHardcodedSecrets(document, maskedText, cfg.secretProviders));
 
   // Rules 2-8 apply to Mule application XML, not MUnit test suites themselves.
   if (isMUnitDocument(document, maskedText)) {
-    return filterSuppressedDiagnostics(diagnostics, rawText, false);
+    const unsuppressed = filterSuppressedDiagnostics(diagnostics, rawText, false);
+    return filterBaselinedDiagnostics(document, applyRuleOverrides(unsuppressed, cfg));
   }
 
   const flows = extractFlows(maskedText);
   if (flows.length > 0) {
-    const munitFiles = loadMUnitTestFiles(document);
+    const munitFiles = index ? [] : loadMUnitTestFiles(document);
     const sourceBaseName = path.basename(
       document.fileName,
       path.extname(document.fileName)
     );
 
-    for (const flow of flows) {
+    const sameFileFlowInfos: FlowInfo[] = flows.map((f) => {
+      const existing = index?.flows.get(f.name);
+      if (existing) {
+        return existing;
+      }
+      const ehRefMatch = /<error-handler\s+[^>]*?(?<![\w:-])ref\s*=\s*["']([^"']+)["']/i.exec(f.body);
+      return {
+        name: f.name,
+        kind: 'flow',
+        uri: document.uri,
+        line: document.positionAt(f.openTagStart).line,
+        hasErrorHandler: ERROR_HANDLER_REGEX.test(f.body),
+        errorHandlerRef: ehRefMatch?.[1]?.trim(),
+        flowRefs: [],
+        isApikitRoute: /^(get|post|put|patch|delete|head|options):\\/i.test(f.name),
+        isApikitMain: /<apikit:router(?=[\s/>])/i.test(f.body) || /-main$/i.test(f.name),
+      };
+    });
+
+    for (let i = 0; i < flows.length; i++) {
+      const flow = flows[i];
+      const flowInfo = sameFileFlowInfos[i];
       const flowHeaderRange = new vscode.Range(
         document.positionAt(flow.openTagStart),
         document.positionAt(flow.openTagEnd + 1)
       );
 
-      // Rule 2 (MG002): Missing error handler
-      if (!ERROR_HANDLER_REGEX.test(flow.body)) {
-        diagnostics.push(
-          createDiagnostic(
-            flowHeaderRange,
-            'MuleGuard: Flow has no error handler',
-            vscode.DiagnosticSeverity.Warning,
-            RuleCode.MissingErrorHandler
-          )
-        );
+      // Rule 2 (MG002): Missing error handler (APIkit route + caller-transitive aware)
+      if (index) {
+        const ehResult = isFlowErrorHandled(flowInfo, sameFileFlowInfos, index);
+        if (!ehResult.handled) {
+          if (ehResult.unresolvedRef) {
+            diagnostics.push(
+              createDiagnostic(
+                flowHeaderRange,
+                `MuleGuard: error-handler ref "${ehResult.unresolvedRef}" is not defined in workspace`,
+                vscode.DiagnosticSeverity.Warning,
+                RuleCode.UnresolvedErrorHandler
+              )
+            );
+          } else {
+            diagnostics.push(
+              createDiagnostic(
+                flowHeaderRange,
+                'MuleGuard: Flow has no error handler',
+                vscode.DiagnosticSeverity.Warning,
+                RuleCode.MissingErrorHandler
+              )
+            );
+          }
+        }
+      } else if (!ERROR_HANDLER_REGEX.test(flow.body)) {
+        const isApikitRouteHandled =
+          flowInfo.isApikitRoute &&
+          sameFileFlowInfos.some((f) => f.isApikitMain && f.hasErrorHandler);
+        if (!isApikitRouteHandled) {
+          diagnostics.push(
+            createDiagnostic(
+              flowHeaderRange,
+              'MuleGuard: Flow has no error handler',
+              vscode.DiagnosticSeverity.Warning,
+              RuleCode.MissingErrorHandler
+            )
+          );
+        }
       }
 
-      // Rule 3 (MG003): Missing logger
-      if (!LOGGER_REGEX.test(flow.body)) {
+      // Rule 3 (MG003): Missing logger (accepts logging plugin flows & skips single-ref APIkit routes)
+      if (
+        !isSingleFlowRefApikitRoute(flow.name, flow.body) &&
+        !hasAcceptedLogging(flow.body, cfg.acceptedLoggingFlows)
+      ) {
         diagnostics.push(
           createDiagnostic(
             flowHeaderRange,
@@ -404,8 +518,11 @@ export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnosti
         );
       }
 
-      // Rule 5 (MG005): Missing MUnit test coverage
-      if (!hasMUnitCoverageForFlow(flow.name, sourceBaseName, munitFiles)) {
+      // Rule 5 (MG005): Missing MUnit test coverage (transitive caller + mock-when aware)
+      const hasMUnit = index
+        ? isFlowCoveredByMUnit(flow.name, sourceBaseName, index)
+        : hasMUnitCoverageForFlow(flow.name, sourceBaseName, munitFiles);
+      if (!hasMUnit) {
         diagnostics.push(
           createDiagnostic(
             flowHeaderRange,
@@ -419,13 +536,17 @@ export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnosti
   }
 
   // Pro rules: DataWeave null safety inside <ee:transform> & CloudHub vCore cost guards.
-  diagnostics.push(...analyzeDataWeaveInXml(document, maskedText));
+  const isApikitFile =
+    /<apikit:router(?=[\s/>])/i.test(maskedText) ||
+    flows.some((f) => /^(get|post|put|patch|delete|head|options):\\/i.test(f.name));
+  diagnostics.push(...analyzeDataWeaveInXml(document, maskedText, isApikitFile));
   diagnostics.push(...analyzeCostIssues(document, maskedText));
 
   // Expanded Best Practice (BP) and Security (S) rules
-  diagnostics.push(...analyzeBestPractices(document, maskedText, flows));
+  diagnostics.push(...analyzeBestPractices(document, maskedText, flows, index, cfg));
 
-  return filterSuppressedDiagnostics(diagnostics, rawText, false);
+  const unsuppressed = filterSuppressedDiagnostics(diagnostics, rawText, false);
+  return filterBaselinedDiagnostics(document, applyRuleOverrides(unsuppressed, cfg));
 }
 
 /**
@@ -433,7 +554,8 @@ export function analyzeDocument(document: vscode.TextDocument): vscode.Diagnosti
  */
 export function scanDocument(
   document: vscode.TextDocument,
-  collection: vscode.DiagnosticCollection
+  collection: vscode.DiagnosticCollection,
+  index?: WorkspaceIndex
 ): void {
   if (!isEnabled()) {
     collection.delete(document.uri);
@@ -441,10 +563,11 @@ export function scanDocument(
   }
 
   if (!isScannableDocument(document)) {
+    collection.delete(document.uri);
     return;
   }
 
-  const diagnostics = analyzeDocument(document);
+  const diagnostics = analyzeDocument(document, index);
   collection.set(document.uri, diagnostics);
 }
 
@@ -472,17 +595,18 @@ export async function scanWorkspace(
 
   collection.clear();
 
-  const uris = await vscode.workspace.findFiles(
-    '**/*.{xml,dwl}',
-    WORKSPACE_EXCLUDE_GLOB
-  );
+  const index = await buildIndex();
+  const cfg = getResolvedConfig();
+  const excludeGlob = buildWorkspaceExcludeGlob(cfg.exclude) || WORKSPACE_EXCLUDE_GLOB;
+
+  const uris = await vscode.workspace.findFiles('**/*.{xml,dwl}', excludeGlob);
 
   let filesScanned = 0;
   for (const uri of uris) {
     try {
       const document = await vscode.workspace.openTextDocument(uri);
       if (isScannableDocument(document)) {
-        const diagnostics = analyzeDocument(document);
+        const diagnostics = analyzeDocument(document, index);
         collection.set(document.uri, diagnostics);
         filesScanned++;
       }

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http">
+  <flow name="enterprise-orders-api-main">
+    <http:listener config-ref="HTTP_Listener_config" path="/api/*"/>
+    <flow-ref doc:name="Start Log" name="logging-flow"/>
+    <apikit:router config-ref="api-config"/>
+    <error-handler ref="global-error-handler"/>
+  </flow>
+
+  <flow name="get:\orders:api-config">
+    <flow-ref doc:name="Get Orders Impl" name="get-orders-impl-sub-flow"/>
+  </flow>
+
+  <flow name="post:\orders:api-config">
+    <flow-ref doc:name="Create Order Impl" name="create-order-impl-sub-flow"/>
+  </flow>
+</mule>

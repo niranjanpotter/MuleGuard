@@ -1,4 +1,6 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
+import { getResolvedConfig, getWorkspaceRootForUri } from './config';
 
 export const DATAWEAVE_SOURCE = 'MuleGuard';
 
@@ -6,7 +8,8 @@ export const DATAWEAVE_RULE_CODES = {
   NullSafety: 'MG006',
 } as const;
 
-const MEMBER_ACCESS_REGEX = /\b(?:payload|vars|attributes)(?:\.[a-zA-Z_][\w$]*){2,}/g;
+const MEMBER_ACCESS_REGEX =
+  /\b(payload|vars|attributes)((?:\??\.[A-Za-z_][\w$]*|\[\d+\]){2,})/g;
 
 const NUMERIC_SUFFIX_REGEX =
   /(?:^|_|(?<=[a-z]))(age|count|qty|quantity|amount|total|price|cost|rate|balance|score|num|number|index|size|length|limit|offset|port|year|month|day|days|hours|minutes|seconds|timeout|retries|percent|percentage|tax|discount|fee|weight|height|width|salary|revenue|budget|vcore|vcores)s?$/i;
@@ -15,6 +18,26 @@ const SAFE_FOLLOWING_OPERATOR_REGEX =
   /^\s*(?:==|!=|map\b|filter\b|flatMap\b|groupBy\b|orderBy\b|reduce\b|pluck\b|distinctBy\b)/i;
 
 const DEFAULT_AFTER_REGEX = /^\s*(?:as\s+[A-Za-z0-9_]+\s*)?\bdefault\b/i;
+
+const FIXTURE_PATH_REGEX =
+  /(?:^|[/\\])(?:src[/\\]test|sample|samples|fixtures|examples)(?:[/\\]|$)/i;
+
+/**
+ * Classifies a .dwl file as a test fixture / sample payload when path or body indicates literal test data.
+ */
+export function isFixtureDwlFile(filePath: string, content?: string): boolean {
+  if (FIXTURE_PATH_REGEX.test(filePath)) {
+    return true;
+  }
+  if (content !== undefined) {
+    const hasOutput = /^\s*output\b/m.test(content);
+    const hasSeparator = /^\s*---\s*$/m.test(content);
+    if (!hasOutput && !hasSeparator) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Infers whether a DataWeave expression expects a Number or String default value.
@@ -78,10 +101,17 @@ function findTagEnd(text: string, tagStart: number): number {
   return -1;
 }
 
+export interface DataWeaveCheckOptions {
+  minDepth: number;
+  maxPerFile: number;
+  isApikitContext?: boolean;
+}
+
 function analyzeDataWeaveSlice(
   document: vscode.TextDocument,
   rawSlice: string,
-  baseOffset: number
+  baseOffset: number,
+  options: DataWeaveCheckOptions
 ): vscode.Diagnostic[] {
   const masked = maskDataWeaveCommentsAndStrings(rawSlice);
   const diagnostics: vscode.Diagnostic[] = [];
@@ -89,35 +119,64 @@ function analyzeDataWeaveSlice(
 
   let match: RegExpExecArray | null;
   while ((match = MEMBER_ACCESS_REGEX.exec(masked)) !== null) {
+    const rootIdent = match[1];
+    const chain = match[2];
     const exprStart = match.index;
     const exprEnd = match.index + match[0].length;
+
+    // Skip safe navigation (?.) or forced non-null (!)
+    if (chain.includes('?.') || chain.includes('!')) {
+      continue;
+    }
+
+    const segments = chain.match(/\??\.[A-Za-z_][\w$]*|\[\d+\]/g) ?? [];
+    if (segments.length < options.minDepth) {
+      continue;
+    }
+
+    if (
+      options.isApikitContext &&
+      rootIdent === 'attributes' &&
+      /^\.(headers|queryParams|uriParams)\b/i.test(chain)
+    ) {
+      continue;
+    }
 
     const lineStart = masked.lastIndexOf('\n', exprStart - 1) + 1;
     const nextNewline = masked.indexOf('\n', exprEnd);
     const lineEnd = nextNewline === -1 ? masked.length : nextNewline;
 
     const lineText = masked.slice(lineStart, lineEnd);
+    const beforeOnLine = masked.slice(lineStart, exprStart);
     const afterOnLine = masked.slice(exprEnd, lineEnd);
 
-    // Skip function invocations and existence checks (e.g. foo() or foo?).
-    if (/^\s*[?(]/.test(afterOnLine)) {
+    // Skip function invocations, existence checks (?), and forced non-null (!)
+    if (/^\s*[?(!]/.test(afterOnLine)) {
       continue;
     }
 
-    // Skip expressions already guarded by default or conditional logic.
+    // Skip expressions already guarded by default, if, isEmpty(), sizeOf(), or p()
     if (DEFAULT_AFTER_REGEX.test(afterOnLine)) {
       continue;
     }
-    if (/\bif\b/i.test(lineText) || SAFE_FOLLOWING_OPERATOR_REGEX.test(afterOnLine)) {
+    if (/\bif\b\s*\(?/i.test(lineText) || SAFE_FOLLOWING_OPERATOR_REGEX.test(afterOnLine)) {
       continue;
     }
+    if (/(?:isEmpty|sizeOf|p)\s*\([^)]*$/i.test(beforeOnLine)) {
+      continue;
+    }
+
+    const severity =
+      segments.length >= 3
+        ? vscode.DiagnosticSeverity.Warning
+        : vscode.DiagnosticSeverity.Information;
 
     const start = document.positionAt(baseOffset + exprStart);
     const end = document.positionAt(baseOffset + exprEnd);
     const diagnostic = new vscode.Diagnostic(
       new vscode.Range(start, end),
       'Possible NullPointer - Add default',
-      vscode.DiagnosticSeverity.Warning
+      severity
     );
     diagnostic.source = DATAWEAVE_SOURCE;
     diagnostic.code = DATAWEAVE_RULE_CODES.NullSafety;
@@ -127,13 +186,49 @@ function analyzeDataWeaveSlice(
   return diagnostics;
 }
 
+function capDiagnostics(
+  document: vscode.TextDocument,
+  diagnostics: vscode.Diagnostic[],
+  maxPerFile: number
+): vscode.Diagnostic[] {
+  if (maxPerFile <= 0 || diagnostics.length <= maxPerFile) {
+    return diagnostics;
+  }
+
+  const capped = diagnostics.slice(0, maxPerFile);
+  const suppressedCount = diagnostics.length - maxPerFile;
+  const line0End = document.lineCount > 0 ? document.lineAt(0).text.length : 0;
+  const summaryDiag = new vscode.Diagnostic(
+    new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, Math.min(1, line0End))),
+    `MuleGuard: ${suppressedCount} additional MG006 null-safety findings suppressed (cap: ${maxPerFile})`,
+    vscode.DiagnosticSeverity.Information
+  );
+  summaryDiag.source = DATAWEAVE_SOURCE;
+  summaryDiag.code = DATAWEAVE_RULE_CODES.NullSafety;
+  return [summaryDiag, ...capped];
+}
+
 /**
  * Analyzes a standalone .dwl DataWeave document for null-safety issues.
  */
 export function analyzeDataWeaveDocument(
-  document: vscode.TextDocument
+  document: vscode.TextDocument,
+  isApikitContext = false
 ): vscode.Diagnostic[] {
-  return analyzeDataWeaveSlice(document, document.getText(), 0);
+  const text = document.getText();
+  const cfg = getResolvedConfig(document.uri);
+  const rootPath = getWorkspaceRootForUri(document.uri);
+  const relPath = rootPath ? path.relative(rootPath, document.fileName) : document.fileName;
+  if (!cfg.lintFixtures && isFixtureDwlFile(relPath, text)) {
+    return [];
+  }
+
+  const diags = analyzeDataWeaveSlice(document, text, 0, {
+    minDepth: cfg.nullSafetyMinDepth,
+    maxPerFile: cfg.nullSafetyMaxPerFile,
+    isApikitContext,
+  });
+  return capDiagnostics(document, diags, cfg.nullSafetyMaxPerFile);
 }
 
 /**
@@ -141,9 +236,17 @@ export function analyzeDataWeaveDocument(
  */
 export function analyzeDataWeaveInXml(
   document: vscode.TextDocument,
-  maskedXmlText: string
+  maskedXmlText: string,
+  isApikitContext = false
 ): vscode.Diagnostic[] {
   const rawXmlText = document.getText();
+  const cfg = getResolvedConfig(document.uri);
+  const options: DataWeaveCheckOptions = {
+    minDepth: cfg.nullSafetyMinDepth,
+    maxPerFile: cfg.nullSafetyMaxPerFile,
+    isApikitContext: isApikitContext || /<apikit:router(?=[\s/>])/i.test(maskedXmlText),
+  };
+
   const diagnostics: vscode.Diagnostic[] = [];
   const transformOpenRegex = /<ee:transform(?=[\s>])/gi;
 
@@ -217,13 +320,13 @@ export function analyzeDataWeaveInXml(
         const cdataContentEnd = cdataContentStart + cdataMatch[1].length;
         const rawCdataSlice = rawXmlText.slice(cdataContentStart, cdataContentEnd);
         diagnostics.push(
-          ...analyzeDataWeaveSlice(document, rawCdataSlice, cdataContentStart)
+          ...analyzeDataWeaveSlice(document, rawCdataSlice, cdataContentStart, options)
         );
       }
 
       if (!foundCdata) {
         diagnostics.push(
-          ...analyzeDataWeaveSlice(document, maskedInner, innerStart)
+          ...analyzeDataWeaveSlice(document, maskedInner, innerStart, options)
         );
       }
 
@@ -234,5 +337,5 @@ export function analyzeDataWeaveInXml(
       transformCloseMatch.index + transformCloseMatch[0].length;
   }
 
-  return diagnostics;
+  return capDiagnostics(document, diagnostics, cfg.nullSafetyMaxPerFile);
 }

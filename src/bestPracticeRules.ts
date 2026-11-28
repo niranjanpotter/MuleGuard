@@ -1,19 +1,25 @@
 import * as vscode from 'vscode';
+import { getResolvedConfig, isSafeSecretExpression, ResolvedMuleGuardConfig } from './config';
 import { findTagEnd, MuleFlow } from './diagnostics';
+import { WorkspaceIndex } from './workspaceIndex';
 
 export enum BPRuleCode {
   FlowNameNotKebab = 'BP-01',
   SubFlowNameNotKebab = 'BP-02',
   HardcodedPort = 'BP-03',
+  MissingResponseTimeout = 'BP-04',
   CommentedOutCode = 'BP-05',
   TooManyComponents = 'BP-06',
   MissingDocName = 'BP-07',
   Mule3Syntax = 'BP-08',
   EmptyFlow = 'BP-09',
   BrokenFlowRef = 'BP-10',
+  DwlEnvDrift = 'BP-11',
   HttpWithoutHttps = 'S-01',
   InsecureTrustStore = 'S-02',
   WildcardCors = 'S-03',
+  HardcodedBearerToken = 'S-04',
+  InsecureTlsProtocol = 'S-05',
   BasicAuthNotSecure = 'S-06',
   TraceLogger = 'S-07',
 }
@@ -81,23 +87,29 @@ export function analyzeBestPractices(
   document: vscode.TextDocument,
   maskedText: string,
   flows: MuleFlow[],
+  index?: WorkspaceIndex,
+  config?: ResolvedMuleGuardConfig,
 ): vscode.Diagnostic[] {
   const diagnostics: vscode.Diagnostic[] = [];
   const originalText = document.getText();
+  const resolvedConfig = config ?? getResolvedConfig(document.uri);
 
-  checkKebabCaseNames(document, maskedText, diagnostics);
+  checkKebabCaseNames(document, maskedText, resolvedConfig, diagnostics);
   checkHardcodedPort(document, maskedText, diagnostics);
+  checkMissingResponseTimeout(document, maskedText, diagnostics);
   checkCommentedOutCode(document, originalText, diagnostics);
   checkTooManyComponents(document, maskedText, flows, diagnostics);
   checkMissingDocName(document, maskedText, diagnostics);
   checkMule3Syntax(document, maskedText, diagnostics);
   checkEmptyFlow(document, maskedText, flows, diagnostics);
-  checkBrokenFlowRef(document, maskedText, flows, diagnostics);
+  checkBrokenFlowRef(document, maskedText, flows, index, diagnostics);
 
   checkHttpWithoutHttps(document, maskedText, diagnostics);
   checkInsecureTrustStore(document, maskedText, diagnostics);
   checkWildcardCors(document, maskedText, diagnostics);
-  checkBasicAuthNotSecure(document, maskedText, diagnostics);
+  checkHardcodedBearerToken(document, maskedText, resolvedConfig, diagnostics);
+  checkInsecureTlsProtocol(document, maskedText, diagnostics);
+  checkBasicAuthNotSecure(document, maskedText, resolvedConfig, diagnostics);
   checkTraceLogger(document, maskedText, diagnostics);
 
   return diagnostics;
@@ -108,17 +120,29 @@ export function analyzeBestPractices(
 function checkKebabCaseNames(
   document: vscode.TextDocument,
   maskedText: string,
+  config: ResolvedMuleGuardConfig,
   diagnostics: vscode.Diagnostic[],
 ): void {
+  const ignoreRegexes = config.namingIgnorePatterns.map((p) => {
+    try {
+      return new RegExp(p, 'i');
+    } catch {
+      return null;
+    }
+  }).filter((r): r is RegExp => r !== null);
+
   const patterns: { regex: RegExp; code: BPRuleCode; label: string }[] = [
-    { regex: /<flow\s+[^>]*?\bname\s*=\s*"([^"]*)"/gi, code: BPRuleCode.FlowNameNotKebab, label: 'Flow' },
-    { regex: /<sub-flow\s+[^>]*?\bname\s*=\s*"([^"]*)"/gi, code: BPRuleCode.SubFlowNameNotKebab, label: 'Sub-flow' },
+    { regex: /<flow\s+[^>]*?(?<![\w:-])name\s*=\s*"([^"]*)"/gi, code: BPRuleCode.FlowNameNotKebab, label: 'Flow' },
+    { regex: /<sub-flow\s+[^>]*?(?<![\w:-])name\s*=\s*"([^"]*)"/gi, code: BPRuleCode.SubFlowNameNotKebab, label: 'Sub-flow' },
   ];
 
   for (const { regex, code, label } of patterns) {
     let m: RegExpExecArray | null;
     while ((m = regex.exec(maskedText)) !== null) {
       const name = m[1];
+      if (code === BPRuleCode.FlowNameNotKebab && ignoreRegexes.some((rx) => rx.test(name))) {
+        continue;
+      }
       if (!KEBAB_CASE.test(name)) {
         diagnostics.push(
           makeDiag(
@@ -154,6 +178,36 @@ function checkHardcodedPort(
           m[0].length,
           `MuleGuard: Port is hardcoded to "${value}". Use a property placeholder instead`,
           BPRuleCode.HardcodedPort,
+        ),
+      );
+    }
+  }
+}
+
+// ── BP-04: Missing HTTP response timeout ──────────────────────────────
+
+function checkMissingResponseTimeout(
+  document: vscode.TextDocument,
+  maskedText: string,
+  diagnostics: vscode.Diagnostic[],
+): void {
+  const regex = /<http:request-config(?=[\s>])/gi;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(maskedText)) !== null) {
+    const tagEnd = findTagEnd(maskedText, m.index);
+    if (tagEnd === -1) { continue; }
+    const tagText = maskedText.slice(m.index, tagEnd + 1);
+    if (!/\bresponseTimeout\s*=/i.test(tagText)) {
+      const nameMatch = /(?<![\w:-])name\s*=\s*"([^"]*)"/i.exec(tagText);
+      const cfgName = nameMatch?.[1] ?? 'http:request-config';
+      diagnostics.push(
+        makeDiag(
+          document,
+          m.index,
+          tagEnd - m.index + 1,
+          `MuleGuard: HTTP Request Config "${cfgName}" does not specify responseTimeout`,
+          BPRuleCode.MissingResponseTimeout,
+          vscode.DiagnosticSeverity.Information,
         ),
       );
     }
@@ -308,25 +362,45 @@ function checkBrokenFlowRef(
   document: vscode.TextDocument,
   maskedText: string,
   flows: MuleFlow[],
+  index: WorkspaceIndex | undefined,
   diagnostics: vscode.Diagnostic[],
 ): void {
-  // Collect all flow and sub-flow names defined in the file
+  // Collect all flow and sub-flow names defined in the file as fallback
   const definedNames = new Set<string>();
   for (const f of flows) {
     if (f.name) { definedNames.add(f.name); }
   }
-  const subFlowRegex = /<sub-flow\s+[^>]*?\bname\s*=\s*"([^"]*)"/gi;
+  const subFlowRegex = /<sub-flow\s+[^>]*?(?<![\w:-])name\s*=\s*"([^"]*)"/gi;
   let sm: RegExpExecArray | null;
   while ((sm = subFlowRegex.exec(maskedText)) !== null) {
     definedNames.add(sm[1]);
   }
 
-  // Find all flow-ref usages
-  const flowRefRegex = /<flow-ref\s+[^>]*?\bname\s*=\s*"([^"]*)"/gi;
+  // Find all flow-ref usages using boundary that excludes doc:name
+  const flowRefRegex = /<flow-ref\s+[^>]*?(?<![\w:-])name\s*=\s*"([^"]*)"/gi;
   let m: RegExpExecArray | null;
   while ((m = flowRefRegex.exec(maskedText)) !== null) {
-    const refName = m[1];
-    if (!definedNames.has(refName)) {
+    const refName = m[1].trim();
+    if (!refName || refName.startsWith('#[')) {
+      continue;
+    }
+
+    const existsInWorkspace = index ? index.flows.has(refName) : false;
+    const existsInFile = definedNames.has(refName);
+
+    if (index && index.flows.size > 0) {
+      if (!existsInWorkspace && !existsInFile) {
+        diagnostics.push(
+          makeDiag(
+            document,
+            m.index,
+            m[0].length,
+            `MuleGuard: flow-ref target "${refName}" is not defined in src/main/mule`,
+            BPRuleCode.BrokenFlowRef,
+          ),
+        );
+      }
+    } else if (!existsInFile) {
       diagnostics.push(
         makeDiag(
           document,
@@ -436,11 +510,62 @@ function checkWildcardCors(
   }
 }
 
+// ── S-04: Hardcoded Bearer / OAuth Token ──────────────────────────────
+
+function checkHardcodedBearerToken(
+  document: vscode.TextDocument,
+  maskedText: string,
+  config: ResolvedMuleGuardConfig,
+  diagnostics: vscode.Diagnostic[],
+): void {
+  const regex = /\b(?:authorization|bearer|access_token|accessToken|apiKey|api_key)\s*=\s*"([^"]*)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(maskedText)) !== null) {
+    const value = m[1];
+    if (!isSafeSecretExpression(value, config.secretProviders) && value.length >= 6) {
+      diagnostics.push(
+        makeDiag(
+          document,
+          m.index,
+          m[0].length,
+          'MuleGuard: Potential hardcoded API key or Bearer token — externalize with secure properties',
+          BPRuleCode.HardcodedBearerToken,
+          vscode.DiagnosticSeverity.Error,
+        ),
+      );
+    }
+  }
+}
+
+// ── S-05: Insecure TLS Protocol (TLSv1 / TLSv1.1 / SSL) ───────────────
+
+function checkInsecureTlsProtocol(
+  document: vscode.TextDocument,
+  maskedText: string,
+  diagnostics: vscode.Diagnostic[],
+): void {
+  const regex = /\benabledProtocols\s*=\s*"([^"]*(?:SSLv|TLSv1\.0|TLSv1\.1|\bTLSv1\b)[^"]*)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(maskedText)) !== null) {
+    diagnostics.push(
+      makeDiag(
+        document,
+        m.index,
+        m[0].length,
+        `MuleGuard: Deprecated TLS protocol "${m[1]}" enabled — restrict to TLSv1.2 / TLSv1.3`,
+        BPRuleCode.InsecureTlsProtocol,
+        vscode.DiagnosticSeverity.Error,
+      ),
+    );
+  }
+}
+
 // ── S-06: Basic auth credentials not externalised ────────────────────
 
 function checkBasicAuthNotSecure(
   document: vscode.TextDocument,
   maskedText: string,
+  config: ResolvedMuleGuardConfig,
   diagnostics: vscode.Diagnostic[],
 ): void {
   const regex = /<http:basic-authentication(?=[\s/>])/gi;
@@ -455,7 +580,7 @@ function checkBasicAuthNotSecure(
 
     for (const field of credFields) {
       const attrMatch = new RegExp(`\\b${field}\\s*=\\s*"([^"]*)"`, 'i').exec(tagText);
-      if (attrMatch && !isExternalised(attrMatch[1])) {
+      if (attrMatch && !isSafeSecretExpression(attrMatch[1], config.secretProviders)) {
         diagnostics.push(
           makeDiag(
             document,

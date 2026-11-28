@@ -1,6 +1,9 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { runGenerateBadgeCommand } from './badgeGenerator';
+import { createBaseline, invalidateBaselineCache } from './baseline';
 import { executeCodeReviewWorkflow } from './codeReviewEngine';
+import { invalidateConfigCache } from './config';
 import {
   isEnabled,
   isScannableDocument,
@@ -8,13 +11,15 @@ import {
   scanWorkspace,
 } from './diagnostics';
 import { MuleGuardFixProvider, fixAllInDocument } from './fixProvider';
-import { FlowExplorerProvider } from './flowExplorer';
+import { runGenerateFlowDocsCommand } from './flowDocGenerator';
+import { compareDwlAcrossEnvironments, FlowExplorerProvider } from './flowExplorer';
 import { FlowVisualizerPanel } from './flowVisualizer';
 import { MuleGuardHoverProvider, MULE_XML_SELECTOR } from './hoverProvider';
 import { DataWeaveHoverProvider, DATAWEAVE_SELECTOR } from './dataweaveHoverProvider';
 import { explainDataWeaveFile } from './dataweaveExplainer';
 import { ExecutiveReviewPanel } from './executiveReview';
 import { calculateComplexityMetrics, compareEnvConfigs, runSecretScanner } from './tooling';
+import { scheduleIndexRebuild } from './workspaceIndex';
 
 const CHANGE_DEBOUNCE_MS = 250;
 const WORKSPACE_EXCLUDE_GLOB =
@@ -88,9 +93,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     const summary = summarizeIssues(diagnosticCollection);
-    statusBarItem.text = `$(shield) MuleGuard Pro: ${summary.total} Issues`;
+    statusBarItem.text = `$(shield) MuleGuard: ${summary.errors}E / ${summary.warnings}W / ${summary.infos}I`;
     statusBarItem.tooltip = [
-      `MuleGuard Pro Static Analysis (${summary.total} issues)`,
+      `MuleGuard Static Analysis (${summary.total} issues)`,
       `Errors: ${summary.errors} | Warnings: ${summary.warnings} | Info: ${summary.infos}`,
       'Click to scan workspace',
     ].join('\n');
@@ -122,6 +127,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const onSaveDisposable = vscode.workspace.onDidSaveTextDocument((document) => {
     clearPendingTimer(document.uri);
+    if (document.fileName.toLowerCase().endsWith('.xml')) {
+      scheduleIndexRebuild(() => {
+        scanOpenDocuments();
+        updateStatusBar();
+      });
+    }
     scanAndRefresh(document);
   });
 
@@ -148,9 +159,12 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const onConfigDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
-    if (!event.affectsConfiguration('muleguard.enable')) {
+    if (!event.affectsConfiguration('muleguard')) {
       return;
     }
+
+    invalidateConfigCache();
+    invalidateBaselineCache();
 
     if (!isEnabled()) {
       clearAllTimers();
@@ -165,6 +179,20 @@ export function activate(context: vscode.ExtensionContext): void {
       console.error('[MuleGuard Pro] Workspace scan after config change failed:', error);
     });
   });
+
+  const configWatcher = vscode.workspace.createFileSystemWatcher('**/{.muleguard.json,.muleguard-baseline.json}');
+  const handleMetaChange = (): void => {
+    invalidateConfigCache();
+    invalidateBaselineCache();
+    if (isEnabled()) {
+      void runWorkspaceScan().catch((error) => {
+        console.error('[MuleGuard Pro] Rescan after config/baseline change failed:', error);
+      });
+    }
+  };
+  configWatcher.onDidChange(handleMetaChange);
+  configWatcher.onDidCreate(handleMetaChange);
+  configWatcher.onDidDelete(handleMetaChange);
 
   const codeActionsDisposable = vscode.languages.registerCodeActionsProvider(
     [
@@ -214,7 +242,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const activeDoc = vscode.window.activeTextEditor?.document;
       if (activeDoc && isScannableDocument(activeDoc)) {
         const { fixesApplied, secureYamlUpdated } =
-          await fixAllInDocument(activeDoc);
+          await fixAllInDocument(activeDoc, true);
         scanAndRefresh(activeDoc);
 
         if (fixesApplied === 0) {
@@ -356,6 +384,43 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  // Baseline Creation
+  const createBaselineDisposable = vscode.commands.registerCommand(
+    'muleguard.createBaseline',
+    async () => {
+      await runWorkspaceScan();
+      const { entriesCount, filePath } = await createBaseline(diagnosticCollection);
+      await runWorkspaceScan();
+      void vscode.window.showInformationMessage(
+        `MuleGuard: Baseline saved (${entriesCount} finding(s)) to ${filePath ?? '.muleguard-baseline.json'}.`
+      );
+    }
+  );
+
+  // Compare DWL across environments
+  const compareDwlDisposable = vscode.commands.registerCommand(
+    'muleguard.compareDwlAcrossEnvs',
+    async (item) => {
+      await compareDwlAcrossEnvironments(item);
+    }
+  );
+
+  // Flow Documentation Generator
+  const generateFlowDocsDisposable = vscode.commands.registerCommand(
+    'muleguard.generateFlowDocs',
+    async () => {
+      await runGenerateFlowDocsCommand();
+    }
+  );
+
+  // Score Badge Generator
+  const generateBadgeDisposable = vscode.commands.registerCommand(
+    'muleguard.generateBadge',
+    async () => {
+      await runGenerateBadgeCommand();
+    }
+  );
+
   const timerCleanupDisposable = new vscode.Disposable(() => {
     clearAllTimers();
   });
@@ -379,6 +444,7 @@ export function activate(context: vscode.ExtensionContext): void {
     onChangeDisposable,
     onDeleteDisposable,
     onConfigDisposable,
+    configWatcher,
     codeActionsDisposable,
     hoverDisposable,
     dwHoverDisposable,
@@ -391,6 +457,10 @@ export function activate(context: vscode.ExtensionContext): void {
     complexityMetricsDisposable,
     executiveReviewDisposable,
     explainDwlDisposable,
+    createBaselineDisposable,
+    compareDwlDisposable,
+    generateFlowDocsDisposable,
+    generateBadgeDisposable,
     scanCommandDisposable,
     fixAllCommandDisposable,
     timerCleanupDisposable

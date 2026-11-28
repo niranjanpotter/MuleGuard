@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation">
+  <sub-flow name="shared-sub-flow">
+    <logger level="INFO" doc:name="Shared Log" message="Shared logic"/>
+  </sub-flow>
+
+  <sub-flow name="logging-flow">
+    <logger level="INFO" doc:name="Audit Log" message="#[correlationId]"/>
+  </sub-flow>
+</mule>

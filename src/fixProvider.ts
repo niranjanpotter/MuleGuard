@@ -453,11 +453,16 @@ export class MuleGuardFixProvider implements vscode.CodeActionProvider {
   }
 }
 
+function isApikitRouteFlowName(flowName: string): boolean {
+  return /^(get|post|put|patch|delete|head|options):\\/i.test(flowName);
+}
+
 /**
  * Applies all safe auto-fixes across a single .xml or .dwl document in one atomic WorkspaceEdit.
  */
 export async function fixAllInDocument(
-  document: vscode.TextDocument
+  document: vscode.TextDocument,
+  previewAndConfirm = false
 ): Promise<{ fixesApplied: number; secureYamlUpdated: boolean }> {
   const diagnostics = analyzeDocument(document);
   if (diagnostics.length === 0) {
@@ -474,7 +479,8 @@ export async function fixAllInDocument(
       diag.code === RuleCode.MissingErrorHandler ||
       diag.code === RuleCode.MissingLogger
   );
-  const maskedText = needsFlowLookup ? maskXmlComments(document.getText()) : '';
+  const rawText = document.getText();
+  const maskedText = needsFlowLookup ? maskXmlComments(rawText) : '';
   const flows = needsFlowLookup ? extractFlows(maskedText) : [];
 
   let fixesApplied = 0;
@@ -502,7 +508,7 @@ export async function fixAllInDocument(
       }
       case RuleCode.MissingErrorHandler: {
         const flow = findFlowForDiagnostic(document, diagnostic, flows);
-        if (flow && !fixedErrorHandlerFlows.has(flow.openTagStart)) {
+        if (flow && !isApikitRouteFlowName(flow.name) && !fixedErrorHandlerFlows.has(flow.openTagStart)) {
           fixedErrorHandlerFlows.add(flow.openTagStart);
           const insertion = buildErrorHandlerInsertion(document, flow);
           edit.insert(document.uri, insertion.position, insertion.text);
@@ -512,7 +518,7 @@ export async function fixAllInDocument(
       }
       case RuleCode.MissingLogger: {
         const flow = findFlowForDiagnostic(document, diagnostic, flows);
-        if (flow && !fixedLoggerFlows.has(flow.openTagStart)) {
+        if (flow && !isApikitRouteFlowName(flow.name) && !fixedLoggerFlows.has(flow.openTagStart)) {
           fixedLoggerFlows.add(flow.openTagStart);
           const insertion = buildLoggerInsertion(document, flow, maskedText);
           edit.insert(document.uri, insertion.position, insertion.text);
@@ -556,6 +562,38 @@ export async function fixAllInDocument(
 
   if (fixesApplied === 0) {
     return { fixesApplied: 0, secureYamlUpdated: false };
+  }
+
+  if (previewAndConfirm) {
+    const docEdits = edit.get(document.uri);
+    let previewText = rawText;
+    const sortedTextEdits = [...docEdits].sort(
+      (a, b) => document.offsetAt(b.range.start) - document.offsetAt(a.range.start)
+    );
+    for (const te of sortedTextEdits) {
+      const startOff = document.offsetAt(te.range.start);
+      const endOff = document.offsetAt(te.range.end);
+      previewText = previewText.slice(0, startOff) + te.newText + previewText.slice(endOff);
+    }
+
+    const previewDoc = await vscode.workspace.openTextDocument({
+      content: previewText,
+      language: document.languageId,
+    });
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      document.uri,
+      previewDoc.uri,
+      `MuleGuard Fix All Preview: ${path.basename(document.fileName)} (${fixesApplied} fixes)`
+    );
+    const choice = await vscode.window.showInformationMessage(
+      `Apply ${fixesApplied} MuleGuard auto-fix(es) to ${path.basename(document.fileName)}?`,
+      { modal: false },
+      'Apply Fixes'
+    );
+    if (choice !== 'Apply Fixes') {
+      return { fixesApplied: 0, secureYamlUpdated: false };
+    }
   }
 
   const secureYamlUpdated = secretEntries.length > 0;

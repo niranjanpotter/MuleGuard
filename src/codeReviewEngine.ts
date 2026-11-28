@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChecklistRow, QUALITY_CHECKLIST_45, Severity } from './checklist';
 import { extractFlows, maskXmlComments, MuleFlow } from './diagnostics';
+import { ProjectLayoutSummary, scanProjectLayout } from './flowExplorer';
 
 export interface AuditFinding {
   rowId: number;
@@ -28,6 +29,7 @@ export interface CodeReviewResult {
   manualCount: number;
   score: number;
   findings: AuditFinding[];
+  layoutSummary?: ProjectLayoutSummary;
 }
 
 /**
@@ -306,6 +308,27 @@ export async function runCodeReview(muleRoot: string): Promise<CodeReviewResult>
     });
   }
 
+  let layoutSummary: ProjectLayoutSummary | undefined;
+  try {
+    layoutSummary = await scanProjectLayout();
+    const layoutPassed = layoutSummary.fixturesUnderMainResources === 0;
+    findings.push({
+      rowId: 99,
+      section: 'Project Layout & DataWeave',
+      title: 'DataWeave scripts organized by environment and separated from test fixtures',
+      severity: 'LOW',
+      verdict: layoutPassed ? 'PASSED' : 'FAILED',
+      evidence: layoutPassed
+        ? `Detected ${layoutSummary.dwlByEnv.size} environment folder(s), ${layoutSummary.fixtureCount} test fixture(s), and ${layoutSummary.driftedDwl.length} drifted DWL file(s).`
+        : `Found ${layoutSummary.fixturesUnderMainResources} test fixture(s) placed inside src/main/resources.`,
+      fixRecommendation: layoutPassed
+        ? undefined
+        : 'Move test fixture .dwl payloads into src/test/resources/ so they are excluded from production packaging and linting.'
+    });
+  } catch {
+    // Ignore layout scan errors in isolated/headless mode
+  }
+
   // Calculate statistics
   const failedFindings = findings.filter(f => f.verdict === 'FAILED');
   const highCount = failedFindings.filter(f => f.severity === 'HIGH').length;
@@ -329,7 +352,8 @@ export async function runCodeReview(muleRoot: string): Promise<CodeReviewResult>
     passedCount,
     manualCount,
     score,
-    findings
+    findings,
+    layoutSummary
   };
 }
 
@@ -406,6 +430,20 @@ ${manualIssues.map(f => `- [ ] **Row ${f.rowId} (${f.section}):** ${f.title} —
 
 ${passedIssues.slice(0, 15).map(f => `- ✅ **Row ${f.rowId} (${f.section}):** ${f.title}`).join('\n')}
 ${passedIssues.length > 15 ? `*... and ${passedIssues.length - 15} more passed checklist rules.*` : ''}
+
+---
+
+## 7. Detected Project Layout
+
+${result.layoutSummary ? `\`\`\`text
+${path.basename(result.muleRoot)}/
+├── src/main/mule/ (${result.filesScanned} XML file(s))
+├── src/main/resources/dwl/
+${Array.from(result.layoutSummary.dwlByEnv.entries()).map(([env, count]) => `│   ├── ${env}/ (${count} script(s))`).join('\n') || '│   └── (no per-env folders detected)'}
+│   └── shared (${result.layoutSummary.sharedDwlCount} script(s))
+└── src/test/resources/ (${result.layoutSummary.fixtureCount} fixture(s))
+\`\`\`
+${result.layoutSummary.driftedDwl.length > 0 ? `\n**BP-11 Environment Drift Detected (${result.layoutSummary.driftedDwl.length} file(s)):**\n` + result.layoutSummary.driftedDwl.slice(0, 10).map(d => `- \`${d.relativeName}\` differs from \`${d.referenceEnv}\` in: ${d.driftedEnvs.join(', ')}`).join('\n') : '\n✅ All environment DWL copies are consistent.'}` : '*Layout scan skipped.*'}
 
 ---
 *Report generated automatically by MuleGuard Pro.*

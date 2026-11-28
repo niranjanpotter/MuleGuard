@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit">
+  <munit:config name="api-test-suite.xml"/>
+  <munit:test name="get-orders-test">
+    <munit:execution>
+      <flow-ref name="get:\orders:api-config"/>
+    </munit:execution>
+  </munit:test>
+</mule>

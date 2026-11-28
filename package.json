@@ -2,7 +2,7 @@
   "name": "muleguard",
   "displayName": "MuleGuard -- MuleSoft Code Review",
   "description": "Real-time linting, security scanning, connector & DataWeave hover intelligence, and structured code review for MuleSoft Mule 4 applications.",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "publisher": "niranjanpotter",
   "license": "MIT",
   "icon": "icon.png",
@@ -128,14 +128,43 @@
         "title": "MuleGuard: Refresh Flow Explorer",
         "category": "MuleGuard",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "muleguard.createBaseline",
+        "title": "MuleGuard: Create Diagnostic Baseline (.muleguard-baseline.json)",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.compareDwlAcrossEnvs",
+        "title": "Compare Across Environments",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.generateFlowDocs",
+        "title": "MuleGuard: Generate Flow Documentation (docs/flows.md)",
+        "category": "MuleGuard"
+      },
+      {
+        "command": "muleguard.generateBadge",
+        "title": "MuleGuard: Generate Health Score Badge (muleguard-score.svg)",
+        "category": "MuleGuard"
       }
     ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "muleguard.compareDwlAcrossEnvs",
+          "when": "view == muleguardFlowExplorer && viewItem == dwl",
+          "group": "inline"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
           "id": "muleguard-sidebar",
           "title": "MuleGuard",
-          "icon": "icon.png"
+          "icon": "resources/activity-icon.svg"
         }
       ]
     },
@@ -204,6 +233,61 @@
           "type": "boolean",
           "default": true,
           "description": "Enable or disable connector hover tooltips with human-readable logic and Anypoint documentation links."
+        },
+        "muleguard.exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["**/src/test/**", "**/target/**", "**/.mule/**", "**/.tooling-project/**", "**/node_modules/**", "**/out/**", "**/dist/**", "**/.git/**"],
+          "description": "Glob patterns excluded from MuleGuard workspace scanning."
+        },
+        "muleguard.secretProviders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["secure::", "aws-secrets::", "aws-s3::"],
+          "description": "Known-safe property provider prefixes recognized by secret scanning rules."
+        },
+        "muleguard.naming.ignorePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["^(get|post|put|patch|delete|head|options):\\\\", "-main$"],
+          "description": "Regex patterns ignored by BP-01 flow naming checks (e.g. APIkit routes)."
+        },
+        "muleguard.logging.acceptedFlows": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["mule-logging-utilFlow", "*-logger", "*logging*"],
+          "description": "Flow-ref name patterns accepted as satisfying MG003 start-of-flow logging."
+        },
+        "muleguard.dataweave.nullSafety.minDepth": {
+          "type": "number",
+          "default": 3,
+          "description": "Minimum member-access depth before MG006 flags unguarded DataWeave navigation."
+        },
+        "muleguard.dataweave.nullSafety.maxPerFile": {
+          "type": "number",
+          "default": 20,
+          "description": "Maximum MG006 diagnostics emitted per file before summarizing remaining findings."
+        },
+        "muleguard.environments": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["dev", "development", "test", "qa", "sit", "uat", "tlb", "sandbox", "stage", "staging", "prod", "production", "local"],
+          "description": "Environment folder and config name segments used for grouping and sorting."
+        },
+        "muleguard.referenceEnvironment": {
+          "type": "string",
+          "default": "production",
+          "description": "Reference environment used when comparing DataWeave files and configs across environments."
+        },
+        "muleguard.lint.fixtures": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to lint test fixture .dwl payloads with MG006."
+        },
+        "muleguard.baseline.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Filter out findings recorded in .muleguard-baseline.json when present."
         }
       }
     }

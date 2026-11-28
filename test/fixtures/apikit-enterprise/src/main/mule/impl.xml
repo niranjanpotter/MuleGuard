@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation">
+  <sub-flow name="get-orders-impl-sub-flow">
+    <flow-ref doc:name="Logging Utility" name="logging-flow"/>
+    <flow-ref doc:name="Shared Sub Flow" name="shared-sub-flow"/>
+  </sub-flow>
+
+  <sub-flow name="create-order-impl-sub-flow">
+    <flow-ref doc:name="Logging Utility" name="logging-flow"/>
+    <flow-ref doc:name="Shared Sub Flow" name="shared-sub-flow"/>
+  </sub-flow>
+</mule>

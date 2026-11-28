@@ -5,6 +5,27 @@ All notable changes to **MuleGuard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-28
+### Fixed
+- **BP-10 Broken Flow-Ref False Positives:** Fixed attribute boundary regex (`(?<![\w:-])name=`) so `doc:name` is never captured as the target, and resolved `<flow-ref>` targets across the entire workspace via `WorkspaceIndex`.
+- **MG005 MUnit Coverage Accuracy:** Added workspace-wide parsing of `<munit:execution>` `flow-ref` targets, `<munit-tools:mock-when processor="flow-ref">` attributes, and transitive BFS caller coverage.
+- **BP-01 APIkit Flow Naming:** Excluded APIkit generated route flows (`get:\...`, `post:\...`) and `-main` flows via configurable `muleguard.naming.ignorePatterns`.
+- **MG002 APIkit & Transitive Error Handling:** Treated APIkit route flows as covered when their parent router flow is handled, recognized transitive caller error handling, and added `MG002b` for unresolved `<error-handler ref="..."/>`.
+- **MG003 Logging Plugin Support:** Added `muleguard.logging.acceptedFlows` glob matching and skipped single-`<flow-ref>` APIkit route flows.
+- **MG006 DataWeave Null-Safety Noise Reduction:** Raised default `minDepth` to `3`, skipped guarded expressions (`if`, `default`, `?.`, `!`, `isEmpty()`, `sizeOf()`, `p()`), skipped APIkit `attributes.(headers|queryParams|uriParams)`, capped findings per file (`maxPerFile: 20`), and excluded test fixtures by default.
+- **Excluded `.tooling-project` & `src/test`:** Eliminated Anypoint Code Builder cache duplication in the Problems panel.
+- **Legible Activity Bar Icon:** Replaced the 256px dark PNG in the activity bar with a crisp 24x24 monochrome SVG (`resources/activity-icon.svg`).
+- **Implemented Advertised Rules:** Added `BP-04` (HTTP `responseTimeout`), `S-04` (hardcoded Bearer/API keys), and `S-05` (deprecated TLS protocols).
+
+### Added
+- **Workspace Index (`src/workspaceIndex.ts`):** Fast async multi-root index across all `workspaceFolders` with 500ms debounced XML save rebuilds.
+- **Rule Configuration (`.muleguard.json`) & Secret Providers:** Per-rule severity overrides (`off`, `info`, `warning`, `error`), custom excludes, and `secretProviders` (`secure::`, `aws-secrets::`, `aws-s3::`).
+- **Diagnostic Baseline (`muleguard.createBaseline`):** Writes `.muleguard-baseline.json` with line SHA-1 hashes so existing findings stay suppressed across line shifts.
+- **Fix All Diff Preview:** Opens a `vscode.diff` preview with confirmation before applying `fixAll`, and never injects `MG002`/`MG003` into APIkit route flows.
+- **Environment-Grouped DataWeave Explorer & Drift Detection (`BP-11`):** Groups `.dwl` scripts by detected environment, separates `Test Fixtures & Samples`, and adds `Compare Across Environments`.
+- **Flow Documentation Generator (`muleguard.generateFlowDocs`) & Score Badge (`muleguard.generateBadge`):** Emits `docs/flows.md` with Mermaid diagrams and `muleguard-score.svg` for READMEs.
+- **Regression Fixtures & Rules Reference:** Added `test/fixtures/apikit-enterprise/` regression suite and `docs/RULES.md`.
+
 ## [1.0.3] - 2026-11-26
 ### Added & Improved
 - **Architect-Grade DataWeave Hover & Logic Explainer:** Hovering over any DataWeave function (`map`, `filter`, `reduce`, `groupBy`, `distinctBy`, `flatMap`, `flatten`, `pluck`, `mapObject`, `filterObject`, `sizeOf`, `isEmpty`, `write`, `read`, `sum`, `avg`, `min`, `max`, `update`, `do`, `p`, etc.) now reveals:
