@@ -1,5 +1,8 @@
-com\niranjanpotter\muleguard\rules\RuleEngine.class
-com\niranjanpotter\muleguard\model\Severity.class
+com\niranjanpotter\muleguard\rules\WorkspaceIndex$FlowInfo.class
 com\niranjanpotter\muleguard\model\Finding.class
 com\niranjanpotter\muleguard\report\ReportGenerator.class
+com\niranjanpotter\muleguard\config\ConfigLoader.class
+com\niranjanpotter\muleguard\rules\RuleEngine.class
+com\niranjanpotter\muleguard\model\Severity.class
 com\niranjanpotter\muleguard\CheckMojo.class
+com\niranjanpotter\muleguard\rules\WorkspaceIndex.class

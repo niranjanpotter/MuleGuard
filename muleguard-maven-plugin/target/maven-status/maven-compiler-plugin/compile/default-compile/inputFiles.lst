@@ -1,5 +1,7 @@
 D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\rules\RuleEngine.java
 D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\report\ReportGenerator.java
 D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\model\Finding.java
+D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\config\ConfigLoader.java
+D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\rules\WorkspaceIndex.java
 D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\CheckMojo.java
 D:\MuleGuard\muleguard-maven-plugin\src\main\java\com\niranjanpotter\muleguard\model\Severity.java

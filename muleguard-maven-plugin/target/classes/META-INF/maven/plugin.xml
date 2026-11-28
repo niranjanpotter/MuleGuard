@@ -7,7 +7,7 @@
   <description>Enterprise MuleSoft Code Review, Security Guardrails, and Static Analysis Plugin for Anypoint Studio &amp; CI/CD</description>
   <groupId>io.github.niranjanpotter</groupId>
   <artifactId>muleguard-maven-plugin</artifactId>
-  <version>1.0.3</version>
+  <version>1.1.0</version>
   <goalPrefix>muleguard</goalPrefix>
   <isolatedRealm>false</isolatedRealm>
   <inheritedByDefault>true</inheritedByDefault>

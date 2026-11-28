@@ -61,9 +61,13 @@ public class CheckMojo extends AbstractMojo {
         // 2. Generate Artifacts
         ReportGenerator.generateHtmlReport(buildDirectory, findings, qualityScore, minScore);
         ReportGenerator.generateJsonReport(buildDirectory, findings, qualityScore);
+        ReportGenerator.generateSarifReport(buildDirectory, projectBaseDir, findings);
+        ReportGenerator.generateScoreBadge(buildDirectory, qualityScore);
 
         getLog().info("Interactive HTML report saved to: " + new File(buildDirectory, "muleguard-report.html").getAbsolutePath());
         getLog().info("JSON report saved to: " + new File(buildDirectory, "muleguard-report.json").getAbsolutePath());
+        getLog().info("SARIF report saved to: " + new File(buildDirectory, "muleguard-report.sarif").getAbsolutePath());
+        getLog().info("Score badge saved to: " + new File(buildDirectory, "muleguard-score.svg").getAbsolutePath());
 
         // 3. Quality Gate Enforcement
         boolean hasCritical = false;

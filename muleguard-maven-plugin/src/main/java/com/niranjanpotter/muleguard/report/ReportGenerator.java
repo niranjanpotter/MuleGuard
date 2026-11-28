@@ -119,7 +119,7 @@ public class ReportGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n")
           .append("  \"tool\": \"MuleGuard Maven Plugin\",\n")
-          .append("  \"version\": \"1.0.3\",\n")
+          .append("  \"version\": \"1.1.0\",\n")
           .append("  \"score\": ").append(score).append(",\n")
           .append("  \"timestamp\": \"").append(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(new Date())).append("\",\n")
           .append("  \"totalFindings\": ").append(findings.size()).append(",\n")
@@ -140,6 +140,72 @@ public class ReportGenerator {
         sb.append("  ]\n}");
 
         writeFile(jsonFile, sb.toString());
+    }
+
+    public static void generateSarifReport(File outputDir, File baseDir, List<Finding> findings) {
+        if (!outputDir.exists()) outputDir.mkdirs();
+        File sarifFile = new File(outputDir, "muleguard-report.sarif");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n")
+          .append("  \"$schema\": \"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json\",\n")
+          .append("  \"version\": \"2.1.0\",\n")
+          .append("  \"runs\": [\n")
+          .append("    {\n")
+          .append("      \"tool\": {\n")
+          .append("        \"driver\": {\n")
+          .append("          \"name\": \"MuleGuard\",\n")
+          .append("          \"version\": \"1.1.0\",\n")
+          .append("          \"informationUri\": \"https://github.com/niranjanpotter/MuleGuard\"\n")
+          .append("        }\n")
+          .append("      },\n")
+          .append("      \"results\": [\n");
+
+        for (int i = 0; i < findings.size(); i++) {
+            Finding f = findings.get(i);
+            String level = (f.getSeverity() == Severity.CRITICAL || f.getSeverity() == Severity.HIGH)
+                ? "error" : (f.getSeverity() == Severity.MEDIUM ? "warning" : "note");
+            String relUri = f.getFilePath().replace("\\", "/");
+            try {
+                relUri = baseDir.toPath().toAbsolutePath().normalize()
+                    .relativize(new File(f.getFilePath()).toPath().toAbsolutePath().normalize())
+                    .toString().replace("\\", "/");
+            } catch (Exception ignored) {}
+
+            sb.append("        {\n")
+              .append("          \"ruleId\": \"").append(f.getRuleId()).append("\",\n")
+              .append("          \"level\": \"").append(level).append("\",\n")
+              .append("          \"message\": { \"text\": \"").append(escapeJson(f.getMessage() + " " + f.getRecommendation())).append("\" },\n")
+              .append("          \"locations\": [{\n")
+              .append("            \"physicalLocation\": {\n")
+              .append("              \"artifactLocation\": { \"uri\": \"").append(escapeJson(relUri)).append("\" },\n")
+              .append("              \"region\": { \"startLine\": ").append(Math.max(1, f.getLineNumber())).append(" }\n")
+              .append("            }\n")
+              .append("          }]\n")
+              .append("        }").append(i < findings.size() - 1 ? "," : "").append("\n");
+        }
+
+        sb.append("      ]\n")
+          .append("    }\n")
+          .append("  ]\n")
+          .append("}\n");
+
+        writeFile(sarifFile, sb.toString());
+    }
+
+    public static void generateScoreBadge(File outputDir, int score) {
+        if (!outputDir.exists()) outputDir.mkdirs();
+        File svgFile = new File(outputDir, "muleguard-score.svg");
+        String color = score < 60 ? "#e05d44" : (score < 80 ? "#dfb317" : "#4c1");
+        String value = score + "/100";
+        String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"124\" height=\"20\" role=\"img\" aria-label=\"muleguard: " + value + "\">\n"
+            + "  <clipPath id=\"r\"><rect width=\"124\" height=\"20\" rx=\"3\" fill=\"#fff\"/></clipPath>\n"
+            + "  <g clip-path=\"url(#r)\"><rect width=\"70\" height=\"20\" fill=\"#555\"/><rect x=\"70\" width=\"54\" height=\"20\" fill=\"" + color + "\"/></g>\n"
+            + "  <g fill=\"#fff\" text-anchor=\"middle\" font-family=\"Verdana,Geneva,DejaVu Sans,sans-serif\" font-size=\"11\">\n"
+            + "    <text x=\"35\" y=\"14\">muleguard</text><text x=\"97\" y=\"14\">" + value + "</text>\n"
+            + "  </g>\n"
+            + "</svg>\n";
+        writeFile(svgFile, svg);
     }
 
     private static void writeFile(File file, String content) {
